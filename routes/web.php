@@ -277,6 +277,10 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::post('/tetapan/masjid', [MasjidController::class, 'kemaskini'])->name('tetapan.masjid.kemaskini');
 
+        // Phase B — daftar masjid baharu + login bendahari pertama (onboarding multi-masjid)
+        Route::get('/tetapan/masjid-baru', [MasjidController::class, 'baru'])->name('tetapan.masjid.baru');
+        Route::post('/tetapan/masjid-baru', [MasjidController::class, 'ciptaMasjid'])->name('tetapan.masjid.baru.simpan');
+
         // Fasa 6 — API Awam: klien API, webhook, log panggilan
         Route::get('/tetapan/api', [TetapanApiController::class, 'index'])->name('tetapan.api');
         Route::get('/tetapan/api/log', [TetapanApiController::class, 'log'])->name('tetapan.api.log');

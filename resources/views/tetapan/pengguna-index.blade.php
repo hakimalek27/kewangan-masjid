@@ -4,7 +4,12 @@
 
 @section('content')
 <div class="card shadow-sm mb-4">
-    <div class="card-header fw-bold">{{ __('Senarai Pengguna') }}</div>
+    <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+        <span>{{ __('Senarai Pengguna') }}</span>
+        <a href="{{ route('tetapan.masjid.baru') }}" class="btn btn-sm btn-success">
+            <i class="bi bi-building-add me-1"></i>{{ __('Masjid Baru') }}
+        </a>
+    </div>
     <div class="card-body table-responsive">
         <table class="table table-sm table-hover table-bordered align-middle">
             <thead class="table-light">

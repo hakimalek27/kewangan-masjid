@@ -8,7 +8,14 @@
 @endphp
 
 <div class="card shadow-sm mb-4">
-    <div class="card-header fw-bold">{{ __('Profil Masjid') }}</div>
+    <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+        <span>{{ __('Profil Masjid') }}</span>
+        @if ($isAdmin)
+            <a href="{{ route('tetapan.masjid.baru') }}" class="btn btn-sm btn-success">
+                <i class="bi bi-building-add me-1"></i>{{ __('Masjid Baru') }}
+            </a>
+        @endif
+    </div>
     <div class="card-body">
         <div class="row">
             <div class="col-md-2 text-center">
