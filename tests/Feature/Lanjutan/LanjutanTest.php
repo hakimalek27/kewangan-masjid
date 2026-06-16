@@ -4,6 +4,7 @@ namespace Tests\Feature\Lanjutan;
 
 use App\Models\AppUser;
 use App\Models\Approval;
+use App\Models\Attachment;
 use App\Models\BankAccount;
 use App\Models\BankStatementLine;
 use App\Models\DepreciationSchedule;
@@ -19,6 +20,7 @@ use App\Support\Setting;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use LogicException;
 use Tests\Concerns\MasjidContext;
 use Tests\TestCase;
@@ -249,6 +251,75 @@ class LanjutanTest extends TestCase
         $kecil = Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN MC KECIL')->first();
         $this->assertNotNull($kecil, 'Bayaran bawah had mesti terus direkodkan');
         $this->assertNotNull($kecil->voucher_id);
+    }
+
+    /* -------- (e2) Maker-Checker — dokumen sokongan kekal merentas kelulusan -------- */
+
+    public function test_maker_checker_lampiran_kekal_selepas_lulus(): void
+    {
+        Storage::fake('local');
+        Setting::set('approval_threshold', '100');
+
+        // Bendahari, RM250 > had + 1 dokumen → approval PENDING, fail DISTASH,
+        // belum ada pembayaran/attachment BAYARAN.
+        $this->actingAs($this->bendahari)->post(route('belanja.simpan'), [
+            'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
+            'pemohon' => 'UJIAN LAMPIRAN MC', 'coa_id' => $this->coaId('600-06000'),
+            'deskripsi' => 'UJIAN LAMPIRAN', 'jumlah' => '250', 'cara_bayar' => 'EFT',
+            'bank_account_id' => $this->bank->id, 'semakan' => '1',
+            'dokumen' => [UploadedFile::fake()->create('invois.pdf', 120, 'application/pdf')],
+        ])->assertRedirect(route('belanja.senarai'));
+
+        $approval = Approval::withoutMasjidScope()
+            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('status', 'PENDING')->where('amaun', '250.00')->orderByDesc('id')->firstOrFail();
+
+        $payload = json_decode((string) $approval->payload, true);
+        $this->assertNotEmpty($payload['_lampiran'] ?? [], 'Metadata lampiran mesti dlm payload');
+        $stash = $payload['_lampiran'][0]['file_path'];
+        Storage::disk('local')->assertExists($stash);
+        $this->assertSame(0, Attachment::withoutMasjidScope()->where('file_path', $stash)->count(),
+            'Tiada row attachment sebelum kelulusan');
+
+        // Admin luluskan → pembayaran + attachment BAYARAN dipautkan ke fail yg SAMA.
+        $this->actingAs($this->admin)->post(route('kelulusan.lulus', $approval->id))
+            ->assertRedirect(route('kelulusan.index'));
+
+        $pembayaran = Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN LAMPIRAN MC')->firstOrFail();
+        $att = Attachment::withoutMasjidScope()->where('owner_type', 'BAYARAN')
+            ->where('owner_id', $pembayaran->id)->get();
+        $this->assertCount(1, $att, 'Lampiran mesti dipautkan kpd pembayaran selepas lulus');
+        $this->assertSame($stash, $att->first()->file_path);
+        $this->assertSame('invois.pdf', $att->first()->file_name);
+        $this->assertSame((int) config('sppkms.masjid_id'), (int) $att->first()->masjid_id);
+        Storage::disk('local')->assertExists($stash); // fail kekal
+    }
+
+    public function test_maker_checker_lampiran_dibuang_bila_ditolak(): void
+    {
+        Storage::fake('local');
+        Setting::set('approval_threshold', '100');
+
+        $this->actingAs($this->bendahari)->post(route('belanja.simpan'), [
+            'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
+            'pemohon' => 'UJIAN LAMPIRAN TOLAK', 'coa_id' => $this->coaId('600-06000'),
+            'deskripsi' => 'UJIAN TOLAK', 'jumlah' => '300', 'cara_bayar' => 'EFT',
+            'bank_account_id' => $this->bank->id, 'semakan' => '1',
+            'dokumen' => [UploadedFile::fake()->create('resit.pdf', 80, 'application/pdf')],
+        ])->assertRedirect(route('belanja.senarai'));
+
+        $approval = Approval::withoutMasjidScope()
+            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('status', 'PENDING')->where('amaun', '300.00')->orderByDesc('id')->firstOrFail();
+        $stash = json_decode((string) $approval->payload, true)['_lampiran'][0]['file_path'];
+        Storage::disk('local')->assertExists($stash);
+
+        // Tolak → fail distash dibuang, tiada pembayaran tercipta.
+        $this->actingAs($this->admin)->post(route('kelulusan.tolak', $approval->id), ['sebab' => 'Tidak lengkap'])
+            ->assertRedirect(route('kelulusan.index'));
+
+        Storage::disk('local')->assertMissing($stash);
+        $this->assertTrue(Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN LAMPIRAN TOLAK')->doesntExist());
     }
 
     /* ---------------- (f) Rekonsiliasi — import CSV, 1 padan auto 1 tidak ---------------- */

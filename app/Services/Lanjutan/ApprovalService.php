@@ -5,12 +5,14 @@ namespace App\Services\Lanjutan;
 use App\Enums\UserRole;
 use App\Models\AppUser;
 use App\Models\Approval;
+use App\Models\Attachment;
 use App\Models\Pembayaran;
 use App\Services\Integration\AlertService;
 use App\Services\Security\AuditTrailService;
 use App\Services\Transaksi\PembayaranService;
 use App\Support\Setting;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 /**
@@ -95,11 +97,32 @@ class ApprovalService
 
         $jenis = $payload['_jenis'] ?? 'BAYARAN';
         unset($payload['_jenis']);
+        // Dokumen sokongan distash semasa permohonan (lihat BelanjaController::stashLampiran).
+        $lampiran = is_array($payload['_lampiran'] ?? null) ? $payload['_lampiran'] : [];
+        unset($payload['_lampiran']);
 
-        return DB::transaction(function () use ($approval, $payload, $jenis, $checkerId) {
+        return DB::transaction(function () use ($approval, $payload, $jenis, $checkerId, $lampiran) {
             $pembayaran = $jenis === 'REKUPMEN'
                 ? $this->pembayaran->createRekupmen($payload)
                 : $this->pembayaran->createBayaran($payload);
+
+            // Pautkan lampiran yg distash kpd pembayaran sebenar (masjid_id dicop auto
+            // oleh BelongsToMasjid = masjid konteks = masjid permohonan).
+            foreach ($lampiran as $l) {
+                if (empty($l['file_path'])) {
+                    continue;
+                }
+                Attachment::create([
+                    'owner_type'  => 'BAYARAN',
+                    'owner_id'    => $pembayaran->id,
+                    'file_path'   => $l['file_path'],
+                    'file_name'   => $l['file_name'] ?? null,
+                    'mime'        => $l['mime'] ?? null,
+                    'size_bytes'  => $l['size_bytes'] ?? null,
+                    'uploaded_by' => $l['uploaded_by'] ?? null,
+                    'uploaded_at' => $l['uploaded_at'] ?? now(),
+                ]);
+            }
 
             $approval->update([
                 'status'     => 'APPROVED',
@@ -109,7 +132,7 @@ class ApprovalService
             ]);
 
             $this->audit->log('APPROVE', 'approval', ['status' => 'PENDING'], [
-                'status' => 'APPROVED', 'pembayaran_id' => $pembayaran->id, 'jenis' => $jenis,
+                'status' => 'APPROVED', 'pembayaran_id' => $pembayaran->id, 'jenis' => $jenis, 'lampiran' => count($lampiran),
             ], $approval->id);
 
             return $pembayaran;
@@ -121,6 +144,15 @@ class ApprovalService
     {
         if ($approval->status !== 'PENDING') {
             throw new InvalidArgumentException("Permohonan #{$approval->id} telah pun diputuskan ({$approval->status}).");
+        }
+
+        // Permohonan ditolak → tiada pembayaran; buang fail dokumen yg distash (jangan
+        // tinggalkan PII yatim di storan). Tiada row attachment lagi (dicipta masa lulus).
+        $payload = json_decode((string) $approval->payload, true);
+        foreach ((is_array($payload) ? ($payload['_lampiran'] ?? []) : []) as $l) {
+            if (!empty($l['file_path'])) {
+                Storage::disk('local')->delete($l['file_path']);
+            }
         }
 
         $approval->update([

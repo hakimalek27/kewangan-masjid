@@ -53,11 +53,18 @@ class BelanjaController extends Controller
         // simpan permohonan PENDING (TIADA pembayaran/jurnal sehingga diluluskan)
         $kelulusan = app(\App\Services\Lanjutan\ApprovalService::class);
         if ($kelulusan->perluKelulusan((float) $data['jumlah'], $request->user())) {
+            // Simpan dokumen sokongan DAHULU (fail tak boleh diserikan ke payload JSON) —
+            // metadata masuk payload & dipautkan kpd pembayaran sebenar semasa diluluskan
+            // (ApprovalService::lulus) supaya lampiran tidak hilang pada laluan maker-checker.
+            $data['_lampiran'] = $this->stashLampiran($request);
             $approval = $kelulusan->mohon('BAYARAN', (float) $data['jumlah'], $data);
+
+            $bilDok = count($data['_lampiran']);
 
             return redirect()
                 ->route('belanja.senarai')
-                ->with('success', 'Jumlah melebihi had kelulusan (RM '.number_format($kelulusan->had(), 2).") — permohonan #{$approval->id} menunggu kelulusan admin/pengerusi.");
+                ->with('success', 'Jumlah melebihi had kelulusan (RM '.number_format($kelulusan->had(), 2).") — permohonan #{$approval->id}".
+                    ($bilDok ? " ({$bilDok} dokumen sokongan disimpan)" : '').' menunggu kelulusan admin/pengerusi.');
         }
 
         $pembayaran = $this->pembayaran->createBayaran($data);
@@ -193,31 +200,47 @@ class BelanjaController extends Controller
     }
 
     /**
-     * Simpan lampiran dokumen[] ke storan PRIVATE (storage/app/private/lampiran)
-     * + jadual attachment (owner BAYARAN). Lampiran perbelanjaan mengandungi PII
-     * (No. KP, alamat, no. akaun) — TIDAK boleh dihidang terus oleh pelayan web.
-     * Hidangan melalui endpoint berpagar-auth belanja.lampiran().
+     * Cipta row attachment (owner BAYARAN) bagi setiap dokumen[] yang dimuat naik.
+     * Lampiran perbelanjaan mengandungi PII (No. KP, alamat, no. akaun) — disimpan
+     * PRIVATE & dihidang hanya melalui endpoint berpagar-auth belanja.lampiran().
      */
     private function simpanLampiran(Request $request, Pembayaran $pembayaran): void
     {
+        foreach ($this->stashLampiran($request) as $meta) {
+            Attachment::create($meta + ['owner_type' => 'BAYARAN', 'owner_id' => $pembayaran->id]);
+        }
+    }
+
+    /**
+     * Simpan fail dokumen[] ke storan PRIVATE (storage/app/private/lampiran) dan pulang
+     * METADATA setiap fail (TANPA cipta row attachment). Dikongsi oleh laluan terus
+     * (simpanLampiran) DAN laluan maker-checker — pada laluan kelulusan, metadata
+     * disimpan dalam payload permohonan & dipautkan kpd pembayaran semasa diluluskan.
+     */
+    private function stashLampiran(Request $request): array
+    {
+        $meta = [];
         foreach ((array) $request->file('dokumen', []) as $fail) {
             if (!$fail || !$fail->isValid()) {
                 continue;
             }
 
             $path = $fail->store('lampiran', 'local'); // disk private
+            if (!$path) {
+                continue; // gagal simpan (cth disk penuh) — jangan rekod metadata palsu
+            }
 
-            Attachment::create([
-                'owner_type'  => 'BAYARAN',
-                'owner_id'    => $pembayaran->id,
+            $meta[] = [
                 'file_path'   => $path,
                 'file_name'   => $fail->getClientOriginalName(),
                 'mime'        => $fail->getClientMimeType(),
                 'size_bytes'  => $fail->getSize(),
-                'uploaded_by' => app()->bound('current.user_id') ? app('current.user_id') : null,
-                'uploaded_at' => now(),
-            ]);
+                'uploaded_by' => app()->bound('current.user_id') ? (int) app('current.user_id') : null,
+                'uploaded_at' => now()->toDateTimeString(),
+            ];
         }
+
+        return $meta;
     }
 
     /**
