@@ -1,0 +1,110 @@
+<?php
+
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+        // Route TANPA middleware 'web' (tiada sesi/CSRF):
+        //   webhooks.php = webhook masuk (Telegram) · api_v1.php = API awam /v1
+        then: function () {
+            Illuminate\Support\Facades\Route::group([], __DIR__.'/../routes/webhooks.php');
+            Illuminate\Support\Facades\Route::group([], __DIR__.'/../routes/api_v1.php');
+        },
+    )
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'masjid' => \App\Http\Middleware\SetMasjidContext::class,
+            'role'   => \App\Http\Middleware\RoleMiddleware::class,
+            // API awam /v1 (Fasa 6)
+            'api.auth'     => \App\Http\Middleware\Api\ApiClientAuth::class,
+            'api.scope'    => \App\Http\Middleware\Api\ApiScope::class,
+            'api.idem'     => \App\Http\Middleware\Api\ApiIdempotency::class,
+            'api.throttle' => \App\Http\Middleware\Api\ApiThrottle::class,
+            'api.log'      => \App\Http\Middleware\Api\ApiRequestLogger::class,
+        ]);
+        // Fasa 9 — UX: bahasa antaramuka (BM|EN) daripada sesi
+        $middleware->web(append: [\App\Http\Middleware\SetLocale::class]);
+
+        $middleware->redirectGuestsTo(fn () => route('login'));
+        $middleware->redirectUsersTo(fn () => route('dashboard'));
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+        /*
+         | Fasa 7 — log ralat global ke jadual error_log untuk halaman
+         | /admin/ralat. Best-effort dengan pengawal gelung: jika penulisan
+         | error_log itu sendiri gagal (cth DB tumbang), diam senyap —
+         | JANGAN melapor kegagalan log (elak gelung tak terhingga).
+         */
+        $exceptions->reportable(function (Throwable $e): void {
+            static $sedangMelapor = false;
+            if ($sedangMelapor) {
+                return;
+            }
+            $sedangMelapor = true;
+
+            try {
+                \App\Models\ErrorLog::withoutMasjidScope()->create([
+                    'masjid_id' => app()->bound('current.masjid_id') ? app('current.masjid_id') : null,
+                    'user_id'   => app()->bound('current.user_id') ? app('current.user_id') : null,
+                    'level'     => 'ERROR',
+                    'message'   => mb_substr(get_class($e).': '.$e->getMessage(), 0, 500),
+                    'stack'     => mb_substr($e->getTraceAsString(), 0, 2000),
+                    'url'       => app()->runningInConsole() ? '(console)' : mb_substr((string) request()?->fullUrl(), 0, 255),
+                ]);
+            } catch (Throwable) {
+                // senyap — kegagalan log tidak boleh menimbulkan ralat baharu
+            } finally {
+                $sedangMelapor = false;
+            }
+        });
+
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*') || $request->is('v1/*'),
+        );
+
+        /*
+         | Format ralat seragam API awam (API-SPEC.md §7):
+         |   { "error": { "code", "message", "field?" } }
+         | Exception domain (Unbalanced/PeriodLocked/AlreadyVoided) sudah ada
+         | render() sendiri yang mematuhi format — tidak perlu didaftar di sini.
+         */
+        $apiError = fn (string $code, string $message, int $status, ?string $field = null) => response()->json(
+            ['error' => array_filter(['code' => $code, 'message' => $message, 'field' => $field], fn ($v) => $v !== null)],
+            $status
+        );
+
+        $exceptions->renderable(function (ValidationException $e, Request $request) use ($apiError) {
+            if ($request->is('v1/*')) {
+                $field = array_key_first($e->errors());
+
+                return $apiError('VALIDATION_ERROR', $e->errors()[$field][0], 400, $field);
+            }
+        });
+
+        $exceptions->renderable(function (AuthenticationException $e, Request $request) use ($apiError) {
+            if ($request->is('v1/*')) {
+                return $apiError('UNAUTHENTICATED', 'Token tiada atau telah luput.', 401);
+            }
+        });
+
+        $exceptions->renderable(function (NotFoundHttpException $e, Request $request) use ($apiError) {
+            if ($request->is('v1/*')) {
+                return $apiError('NOT_FOUND', 'Rekod atau endpoint tidak dijumpai.', 404);
+            }
+        });
+
+        $exceptions->renderable(function (InvalidArgumentException $e, Request $request) use ($apiError) {
+            if ($request->is('v1/*')) {
+                return $apiError('VALIDATION_ERROR', $e->getMessage(), 400);
+            }
+        });
+    })->create();

@@ -1,0 +1,461 @@
+openapi: 3.0.3
+info:
+  title: API Awam — Sistem Audit Kewangan Masjid (SPAKM)
+  description: |
+    REST + JSON. Membolehkan sistem luar membaca data, merekod penerimaan/pembayaran
+    dan mengambil laporan kewangan masjid.
+
+    **Pengesahan:** dapatkan `access_token` melalui `POST /v1/auth/token`, kemudian
+    hantar header `Authorization: Bearer <token>` dan `X-Client-Key: <client_key>`
+    pada setiap panggilan.
+
+    **Idempotency:** semua `POST` WAJIB hantar header `Idempotency-Key: <uuid unik>`.
+    Key sama dihantar semula akan memulangkan respons asal (tiada rekod berganda).
+
+    **Multi-tenant:** setiap klien terikat kepada SATU masjid sahaja.
+  version: "1.0.0"
+servers:
+  - url: /v1
+tags:
+  - name: Auth
+  - name: Baca
+  - name: Laporan
+  - name: Tulis
+
+paths:
+  /auth/token:
+    post:
+      tags: [Auth]
+      summary: Dapatkan access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_key, secret]
+              properties:
+                client_key: { type: string, example: "3f9c2b1a4d5e6f708192a3b4c5d6e7f8" }
+                secret: { type: string }
+      responses:
+        "200":
+          description: Token berjaya
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, example: Bearer }
+                  expires_in: { type: integer, example: 3600 }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /accounts:
+    get:
+      tags: [Baca]
+      summary: Senarai COA boleh-pos (scope read:accounts)
+      responses:
+        "200":
+          description: Senarai akaun
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kod: { type: string, example: "250-05010" }
+                        nama: { type: string, example: "BANK ISLAM" }
+                        jenis: { type: string, example: "Aset" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/ForbiddenScope" }
+
+  /transactions:
+    get:
+      tags: [Baca]
+      summary: Senarai transaksi (scope read:transactions)
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: type, in: query, schema: { type: string, enum: [receipt, payment] } }
+        - { name: coa, in: query, schema: { type: string }, description: "Kod COA, cth 400-02030" }
+        - { name: program, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: Senarai transaksi + pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Transaction" }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/ForbiddenScope" }
+
+  /transactions/{id}:
+    get:
+      tags: [Baca]
+      summary: Satu transaksi + jurnal Dr/Cr + lampiran (scope read:transactions)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: type
+          in: query
+          required: true
+          schema: { type: string, enum: [receipt, payment] }
+          description: WAJIB — id numerik dikongsi dua jadual (kutipan & pembayaran)
+      responses:
+        "200":
+          description: Butiran transaksi
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /transactions/{id}/void:
+    post:
+      tags: [Tulis]
+      summary: Batalkan transaksi — VOID, bukan padam (scope write:receipts / write:payments ikut jenis)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: type, in: query, required: true, schema: { type: string, enum: [receipt, payment] } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, description: "Sebab pembatalan (jejak audit)" }
+      responses:
+        "200":
+          description: Berjaya dibatalkan (jurnal pembalik dijana)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  status: { type: string, example: VOIDED }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/ForbiddenScope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Duplicate" }
+
+  /balances:
+    get:
+      tags: [Baca]
+      summary: Baki bank/tunai/PWR/FD semasa (scope read:balances)
+      responses:
+        "200":
+          description: Baki setiap akaun tunai & FD
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  as_of: { type: string, example: "2026-06" }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kod: { type: string, example: "250-05010" }
+                        nama: { type: string }
+                        baki: { type: string, example: "102776.61" }
+
+  /reports/trial-balance:
+    get:
+      tags: [Laporan]
+      summary: Imbangan Duga (scope read:reports)
+      parameters:
+        - { name: cutoff, in: query, required: true, schema: { type: string, format: date }, example: "2026-06-30" }
+      responses:
+        "200":
+          description: Imbangan duga pada cutoff (Σdebit = Σkredit)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cutoff: { type: string }
+                  baris:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kod: { type: string }
+                        nama: { type: string }
+                        debit: { type: string }
+                        kredit: { type: string }
+                  jumlah_debit: { type: string }
+                  jumlah_kredit: { type: string }
+
+  /reports/income-statement:
+    get:
+      tags: [Laporan]
+      summary: Penyata Pendapatan & Perbelanjaan / Untung Rugi (scope read:reports)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, example: "2026-01" } }
+        - { name: to, in: query, required: true, schema: { type: string, example: "2026-06" } }
+      responses:
+        "200":
+          description: Hasil & belanja per COA + lebihan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string }
+                  to: { type: string }
+                  hasil: { type: array, items: { type: object } }
+                  belanja: { type: array, items: { type: object } }
+                  jumlah_hasil: { type: string }
+                  jumlah_belanja: { type: string }
+                  lebihan: { type: string }
+
+  /reports/balance-sheet:
+    get:
+      tags: [Laporan]
+      summary: Kunci Kira-Kira (scope read:reports)
+      parameters:
+        - { name: cutoff, in: query, required: true, schema: { type: string, format: date }, example: "2026-06-30" }
+      responses:
+        "200":
+          description: Aset = Liabiliti + Ekuiti (seimbang)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cutoff: { type: string }
+                  aset: { type: array, items: { type: object } }
+                  liabiliti: { type: array, items: { type: object } }
+                  ekuiti: { type: array, items: { type: object } }
+                  lebihan_terkumpul: { type: string }
+                  total_aset: { type: string, example: "183155.95" }
+                  total_liabiliti: { type: string }
+                  total_ekuiti: { type: string }
+                  seimbang: { type: boolean }
+
+  /reports/by-program:
+    get:
+      tags: [Laporan]
+      summary: Laporan mengikut program (scope read:programs)
+      parameters:
+        - { name: from, in: query, schema: { type: string, example: "2026-01" } }
+        - { name: to, in: query, schema: { type: string, example: "2026-06" } }
+      responses:
+        "200":
+          description: Terima/belanja/net per tag program
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        program: { type: string }
+                        terima: { type: string }
+                        belanja: { type: string }
+                        net: { type: string }
+
+  /receipts:
+    post:
+      tags: [Tulis]
+      summary: Rekod penerimaan/kutipan (scope write:receipts)
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, amount, method, receipt_no]
+              properties:
+                date: { type: string, format: date, example: "2026-06-12" }
+                coa: { type: string, example: "400-03010", description: "Kod COA hasil — ATAU local_label" }
+                local_label: { type: string, example: "SUMBANGAN TUNAI", description: "Auto-map ke COA via coa_local_mapping" }
+                amount: { type: number, example: 150.00 }
+                method: { type: string, enum: [TUNAI, CEK, BANK_TRANSFER] }
+                bank_slot: { type: integer, example: 1, description: "Wajib jika method bukan TUNAI" }
+                payer: { type: string, example: "Ahmad" }
+                receipt_no: { type: string, example: "auto", description: "'auto' = guna kaunter siri resit" }
+                program: { type: string, example: "SUMBANGAN" }
+                description: { type: string, example: "Derma Jumaat" }
+                attachment_url: { type: string, format: uri }
+      responses:
+        "201":
+          description: Kutipan direkod, jurnal seimbang dijana
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, example: 10300 }
+                  voucher_ref: { type: string, example: "V000123" }
+                  status: { type: string, example: POSTED }
+                  journal:
+                    type: array
+                    items: { $ref: "#/components/schemas/JournalLine" }
+                  receipt_no: { type: string, example: "0926" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Duplicate" }
+        "422": { $ref: "#/components/responses/Unbalanced" }
+
+  /payments:
+    post:
+      tags: [Tulis]
+      summary: Rekod perbelanjaan/pembayaran (scope write:payments)
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, amount, method, voucher_no]
+              properties:
+                date: { type: string, format: date, example: "2026-06-12" }
+                coa: { type: string, example: "600-06000" }
+                local_label: { type: string }
+                amount: { type: number, example: 320.00 }
+                method: { type: string, enum: [EFT, CEK, PWR] }
+                bank_slot: { type: integer, example: 1, description: "Wajib untuk EFT/CEK" }
+                pwr_coa: { type: string, example: "250-06010", description: "Wajib untuk PWR (akaun 250-060x0)" }
+                payee: { type: string, example: "Katering ABC" }
+                voucher_no: { type: string, example: "auto" }
+                program: { type: string, example: "JAMUAN" }
+                description: { type: string }
+                attachment_url: { type: string, format: uri }
+      responses:
+        "201":
+          description: Pembayaran direkod (Dr belanja / Cr bank|PWR)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  voucher_ref: { type: string, example: "BPV0467-1021" }
+                  status: { type: string, example: POSTED }
+                  journal:
+                    type: array
+                    items: { $ref: "#/components/schemas/JournalLine" }
+                  voucher_no: { type: string, example: "PV0467" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Duplicate" }
+        "422": { $ref: "#/components/responses/Unbalanced" }
+
+security:
+  - bearerAuth: []
+    clientKey: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    clientKey:
+      type: apiKey
+      in: header
+      name: X-Client-Key
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+      description: UUID unik per permintaan — key sama diulang memulangkan respons asal
+
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        id: { type: integer, example: 10293 }
+        type: { type: string, enum: [receipt, payment] }
+        date: { type: string, format: date }
+        amount: { type: number, example: 51.00 }
+        coa: { type: string, example: "400-02030" }
+        coa_name: { type: string, example: "KUTIPAN PROGRAM LAIN-LAIN" }
+        program: { type: string, nullable: true }
+        payer: { type: string, nullable: true, description: "receipt sahaja" }
+        receipt_no: { type: string, nullable: true, description: "receipt sahaja" }
+        payee: { type: string, nullable: true, description: "payment sahaja" }
+        voucher_no: { type: string, nullable: true, description: "payment sahaja" }
+        method: { type: string, example: TUNAI }
+        description: { type: string, nullable: true }
+    TransactionDetail:
+      allOf:
+        - { $ref: "#/components/schemas/Transaction" }
+        - type: object
+          properties:
+            status: { type: string, enum: [POSTED, VOIDED] }
+            voucher_ref: { type: string }
+            journal:
+              type: array
+              items: { $ref: "#/components/schemas/JournalLine" }
+            attachments:
+              type: array
+              items:
+                type: object
+                properties:
+                  url: { type: string }
+                  name: { type: string, nullable: true }
+                  mime: { type: string, nullable: true }
+    JournalLine:
+      type: object
+      properties:
+        coa: { type: string, example: "250-05010" }
+        debit: { type: number, example: 150.00 }
+        credit: { type: number, example: 0 }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDATION_ERROR }
+            message: { type: string, example: "amount mesti > 0" }
+            field: { type: string, nullable: true, example: amount }
+
+  responses:
+    ValidationError:
+      description: Input salah (400 VALIDATION_ERROR)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unauthenticated:
+      description: Token tiada/luput (401 UNAUTHENTICATED)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    ForbiddenScope:
+      description: Scope tidak mencukupi (403 FORBIDDEN_SCOPE)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: Rekod tiada (404 NOT_FOUND)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Duplicate:
+      description: Idempotency-key sama / pendua (409 DUPLICATE)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unbalanced:
+      description: Jurnal tidak seimbang — ditolak (422 UNBALANCED)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

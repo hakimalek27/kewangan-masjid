@@ -1,0 +1,125 @@
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+@import 'tom-select/dist/css/tom-select.bootstrap5.css';
+
+/* ===== Tema SPAKM — gaya SB Admin diport ke Bootstrap 5 ===== */
+
+:root {
+    --spakm-primary: #1d3557;
+    --spakm-primary-2: #2a4a78;
+    --spakm-accent: #2a9d8f;
+}
+
+body {
+    background-color: #f4f6f9;
+    font-size: 0.925rem;
+}
+
+/* --- Sidebar --- */
+.sidebar {
+    width: 250px;
+    min-height: 100vh;
+    background: linear-gradient(180deg, var(--spakm-primary) 0%, var(--spakm-primary-2) 100%);
+    color: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+}
+
+.sidebar-brand { color: #fff; }
+.sidebar-subtitle { font-size: 0.62rem; color: rgba(255, 255, 255, 0.6); padding: 0 0.75rem; }
+.sidebar-divider { border-color: rgba(255, 255, 255, 0.2); }
+.sidebar-footer { color: rgba(255, 255, 255, 0.5); }
+
+.sidebar-link {
+    display: block;
+    padding: 0.65rem 1rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+.sidebar-link:hover, .sidebar-link.active { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.sidebar-link .bi-chevron-down { transition: transform 0.2s; }
+.sidebar-link.collapsed .bi-chevron-down { transform: rotate(-90deg); }
+
+.sidebar-sublink {
+    display: block;
+    padding: 0.45rem 1rem 0.45rem 2.5rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-size: 0.83rem;
+}
+.sidebar-sublink:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.sidebar-sublink.active { color: #fff; font-weight: 600; border-left: 3px solid var(--spakm-accent); }
+
+/* Sidebar responsif: tersembunyi pada skrin kecil, toggle dengan butang */
+@media (max-width: 991.98px) {
+    .sidebar { position: fixed; left: -250px; transition: left 0.25s; height: 100vh; }
+    .sidebar.show { left: 0; }
+}
+
+/* --- Topbar --- */
+.topbar { height: 56px; }
+
+/* --- Login --- */
+.login-page { background: linear-gradient(135deg, var(--spakm-primary) 0%, var(--spakm-accent) 100%); }
+.login-card { width: 100%; max-width: 420px; border-radius: 1rem; }
+
+/* Honeypot — sorok dari manusia, kekal nampak pada bot */
+.hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+/* --- Kad statistik --- */
+.border-start.border-4 { border-left-width: 0.25rem !important; }
+
+/* --- Jadual wang --- */
+.text-rm { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* --- Cetak --- */
+@media print {
+    .sidebar, .topbar, footer, .btn, .no-print { display: none !important; }
+    main { padding: 0 !important; }
+    body { background: #fff; }
+}
+
+/* ===== Fasa 9 — UX ===== */
+
+/* --- Saiz font (A- / A / A+) --- */
+body.font-sm { font-size: 0.82rem; }
+body.font-lg { font-size: 1.05rem; }
+
+/* --- Zon seret & lepas resit --- */
+.drop-zone {
+    border: 2px dashed #adb5bd;
+    border-radius: 0.5rem;
+    color: #6c757d;
+    background: #fafbfc;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.drop-zone:hover, .drop-zone.drop-aktif { border-color: var(--spakm-accent); background: #eef8f6; color: var(--spakm-accent); }
+
+/* --- Mod gelap ringkas --- */
+body.dark-mode { background-color: #14161a; color: #dfe3e8; }
+body.dark-mode .topbar,
+body.dark-mode footer,
+body.dark-mode .card,
+body.dark-mode .modal-content,
+body.dark-mode .dropdown-menu { background-color: #1d2128 !important; color: #dfe3e8; }
+body.dark-mode .card-header,
+body.dark-mode .card-footer { background-color: #232830; color: #dfe3e8; border-color: #343b46; }
+body.dark-mode .card, body.dark-mode .modal-content { border-color: #343b46; }
+body.dark-mode .dropdown-item, body.dark-mode .dropdown-item-text { color: #dfe3e8; }
+body.dark-mode .dropdown-item:hover { background-color: #2a313b; color: #fff; }
+body.dark-mode .nav-link.text-dark, body.dark-mode .text-gray-800, body.dark-mode h1 { color: #dfe3e8 !important; }
+body.dark-mode .table { --bs-table-bg: #1d2128; --bs-table-color: #dfe3e8; --bs-table-border-color: #343b46; --bs-table-striped-bg: #232830; --bs-table-hover-bg: #2a313b; --bs-table-hover-color: #fff; }
+body.dark-mode .table-light { --bs-table-bg: #2a313b; --bs-table-color: #dfe3e8; --bs-table-border-color: #3c4450; }
+body.dark-mode .form-control, body.dark-mode .form-select, body.dark-mode .input-group-text {
+    background-color: #232830; color: #dfe3e8; border-color: #3c4450;
+}
+body.dark-mode .form-control::placeholder { color: #8a93a0; }
+body.dark-mode .form-text, body.dark-mode .text-muted { color: #9aa3af !important; }
+body.dark-mode .alert-info { background-color: #11313b; color: #b7e2ee; border-color: #1d4c5a; }
+body.dark-mode .alert-secondary { background-color: #232830; color: #cfd5dc; border-color: #3c4450; }
+body.dark-mode .drop-zone { background: #232830; border-color: #3c4450; color: #9aa3af; }
+body.dark-mode .btn-outline-secondary { color: #aeb6c0; border-color: #4a5260; }
+body.dark-mode .progress { background-color: #2a313b; }
