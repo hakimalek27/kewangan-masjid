@@ -125,7 +125,11 @@
                 </label>
             </div>
 
-            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>{{ __('Simpan Kutipan') }}</button>
+            @if (auth()->user()?->bolehTulis())
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>{{ __('Simpan Kutipan') }}</button>
+            @else
+                <span class="badge bg-secondary"><i class="bi bi-eye me-1"></i>{{ __('Paparan sahaja — hanya bendahari boleh merekod kutipan.') }}</span>
+            @endif
             <a href="{{ route('kutipan.senarai') }}" class="btn btn-outline-secondary">{{ __('Batal') }}</a>
         </form>
     </div>

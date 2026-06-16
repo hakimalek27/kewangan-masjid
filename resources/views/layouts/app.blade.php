@@ -78,9 +78,16 @@
                     'tetapan.api'       => ['admin'],
                     'tetapan.pengguna'  => ['admin', 'bendahari', 'pentadbir'],
                 ];
+                // Admin Sistem = kawal SISTEM, bukan rekod kewangan → nampak kumpulan SISTEM sahaja.
+                $kumpulanSistem = ['Dashboard', 'AI & Integrasi', 'Pentadbiran', 'Tetapan'];
+                // Item aras-masjid disembunyi daripada admin (dlm kumpulan sistem yg dikongsi).
+                $sembunyiDariAdmin = ['dashboard', 'draf.index', 'tetapan.wizard', 'tetapan.resit', 'tetapan.mapping', 'tetapan.semak', 'tetapan.masjid'];
             @endphp
             @foreach (config('sppkms.menu') as $i => $group)
                 @php
+                    // Admin: langkau kumpulan KEWANGAN MASJID sepenuhnya (papar sistem sahaja).
+                    $langkauAdmin = $peranan === 'admin' && ! in_array($group['label'] ?? '', $kumpulanSistem, true);
+
                     $items = $group['items'];
                     // Admin: pautan Konsol Sistem di puncak kumpulan Dashboard.
                     if ($peranan === 'admin' && ($group['label'] ?? '') === 'Dashboard') {
@@ -89,11 +96,19 @@
                     if ($peranan === 'viewer') {
                         $items = array_filter($items, fn ($it) => in_array($it[1], $viewerRoutes, true));
                     } else {
-                        $items = array_filter($items, fn ($it) => ! isset($menuHad[$it[1]]) || in_array($peranan, $menuHad[$it[1]], true));
+                        $items = array_filter($items, function ($it) use ($peranan, $menuHad, $sembunyiDariAdmin) {
+                            if (isset($menuHad[$it[1]]) && ! in_array($peranan, $menuHad[$it[1]], true)) {
+                                return false;
+                            }
+                            if ($peranan === 'admin' && in_array($it[1], $sembunyiDariAdmin, true)) {
+                                return false;
+                            }
+                            return true;
+                        });
                     }
                     $items = array_values($items);
                 @endphp
-                @continue(empty($items))
+                @continue($langkauAdmin || empty($items))
                 @if (count($items) === 1)
                     <a class="sidebar-link {{ request()->routeIs($items[0][1]) ? 'active' : '' }}"
                        href="{{ route($items[0][1]) }}">
