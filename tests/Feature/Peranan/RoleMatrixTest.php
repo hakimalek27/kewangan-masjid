@@ -67,6 +67,25 @@ class RoleMatrixTest extends TestCase
         $this->assertNotSame(403, $this->actingAs($pengerusi)->post(route('kelulusan.lulus', $approval->id))->status());
     }
 
+    public function test_pentadbir_masjid_urus_tetapan_tiada_rekod_kewangan(): void
+    {
+        $p = $this->buat('pentadbir');
+
+        // Pentadbir Masjid TIDAK merekod kewangan → 403.
+        $this->actingAs($p)->post(route('kutipan.simpan'), [])->assertForbidden();
+        $this->actingAs($p)->post(route('belanja.simpan'), [])->assertForbidden();
+
+        // BOLEH urus tetapan masjid (lepas pagar peranan → validasi 302, bukan 403).
+        $this->assertNotSame(403, $this->actingAs($p)->post(route('bank.simpan'), [])->status());
+        $this->assertNotSame(403, $this->actingAs($p)->post(route('kawalan.simpan'), [])->status());
+        $this->assertNotSame(403, $this->actingAs($p)->post(route('tetapan.masjid.kemaskini'), [])->status());
+        $this->actingAs($p)->get(route('tetapan.pengguna'))->assertOk();
+
+        // BUKAN sistem: Konsol Sistem & onboarding masjid → 403.
+        $this->actingAs($p)->get(route('sistem.console'))->assertForbidden();
+        $this->actingAs($p)->get(route('tetapan.masjid.baru'))->assertForbidden();
+    }
+
     public function test_juruaudit_baca_audit_tiada_tulis(): void
     {
         $ja = $this->buat('juruaudit');

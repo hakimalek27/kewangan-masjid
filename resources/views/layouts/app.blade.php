@@ -76,7 +76,7 @@
                     'admin.dualwrite'   => ['admin'],
                     'tetapan.ai'        => ['admin'],
                     'tetapan.api'       => ['admin'],
-                    'tetapan.pengguna'  => ['admin', 'bendahari'],
+                    'tetapan.pengguna'  => ['admin', 'bendahari', 'pentadbir'],
                 ];
             @endphp
             @foreach (config('sppkms.menu') as $i => $group)

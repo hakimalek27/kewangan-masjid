@@ -208,8 +208,8 @@ class PengasinganDataMasjidTest extends TestCase
             $this->actingAs($u)->post(route('kutipan.simpan'), $data)->assertSessionHasNoErrors();
         }
 
-        // DISEKAT tulis (403): admin (sistem, bukan jurukira), pengerusi, setiausaha, juruaudit, viewer
-        foreach (['admin', 'pengerusi', 'setiausaha', 'juruaudit', 'viewer'] as $role) {
+        // DISEKAT tulis (403): admin (sistem), pentadbir (pentadbir masjid), pengerusi, setiausaha, juruaudit, viewer
+        foreach (['admin', 'pentadbir', 'pengerusi', 'setiausaha', 'juruaudit', 'viewer'] as $role) {
             $u = $this->buatUser($role, $this->home);
             $this->actingAs($u)->post(route('kutipan.simpan'), $data)
                 ->assertForbidden();

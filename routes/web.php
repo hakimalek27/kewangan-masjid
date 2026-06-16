@@ -171,8 +171,8 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/cek-batal/daftar', [CekBatalController::class, 'simpan'])->name('cekbatal.simpan');
     });
 
-    // Daftar BUKAN-kewangan (sewa, peti besi) — bendahari & SETIAUSAHA
-    Route::middleware('role:bendahari,setiausaha')->group(function () {
+    // Daftar BUKAN-kewangan (sewa, peti besi) — bendahari, SETIAUSAHA & pentadbir
+    Route::middleware('role:bendahari,setiausaha,pentadbir')->group(function () {
         Route::post('/peti-besi/daftar', [PetiBesiController::class, 'simpan'])->name('petibesi.simpan');
         Route::post('/sewa/daftar', [SewaanController::class, 'simpan'])->name('sewa.simpan');
         Route::post('/sewa/{sewaan}/kemaskini', [SewaanController::class, 'kemaskini'])->whereNumber('sewaan')->name('sewa.kemaskini');
@@ -222,10 +222,10 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::post('/tetapan/kata-laluan', [KataLaluanController::class, 'kemaskini'])->name('tetapan.katalaluan.kemaskini');
 
     /*
-     | Fasa 4 — Tetapan kewangan masjid: TULIS (POST) & halaman edit — BENDAHARI sahaja.
-     | Info Masjid (bendahari+setiausaha) & Pengurusan Pengguna (admin+bendahari) di bawah.
+     | Fasa 4 — Tetapan masjid: TULIS (POST) & halaman edit — BENDAHARI & PENTADBIR MASJID.
+     | Info Masjid (bendahari+setiausaha+pentadbir) & Pengurusan Pengguna (admin+bendahari+pentadbir) di bawah.
      */
-    Route::middleware('role:bendahari')->group(function () {
+    Route::middleware('role:bendahari,pentadbir')->group(function () {
         // Setting Bank — "Padam" = nyahaktif (rekod mungkin dirujuk transaksi)
         Route::get('/bank/{bank}/edit', [BankController::class, 'edit'])->whereNumber('bank')->name('bank.edit');
         Route::post('/bank', [BankController::class, 'simpan'])->name('bank.simpan');
@@ -285,13 +285,13 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::get('/audit', [AuditController::class, 'index'])->name('admin.audit');
     });
 
-    // Info Masjid (edit profil) — aras MASJID: bendahari & setiausaha.
-    Route::middleware('role:bendahari,setiausaha')->group(function () {
+    // Info Masjid (edit profil) — aras MASJID: bendahari, setiausaha & pentadbir.
+    Route::middleware('role:bendahari,setiausaha,pentadbir')->group(function () {
         Route::post('/tetapan/masjid', [MasjidController::class, 'kemaskini'])->name('tetapan.masjid.kemaskini');
     });
 
-    // Pengurusan Pengguna — admin (semua masjid) + bendahari (masjid SENDIRI, diskop dlm controller).
-    Route::middleware('role:admin,bendahari')->group(function () {
+    // Pengurusan Pengguna — admin (semua masjid) + bendahari/pentadbir (masjid SENDIRI, diskop dlm controller).
+    Route::middleware('role:admin,bendahari,pentadbir')->group(function () {
         Route::get('/tetapan/pengguna', [PenggunaController::class, 'index'])->name('tetapan.pengguna');
         Route::get('/tetapan/pengguna/{pengguna}/edit', [PenggunaController::class, 'edit'])->whereNumber('pengguna')->name('tetapan.pengguna.edit');
         Route::post('/tetapan/pengguna', [PenggunaController::class, 'simpan'])->name('tetapan.pengguna.simpan');
@@ -359,10 +359,10 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/kelulusan/{approval}/tolak', [KelulusanController::class, 'tolak'])->whereNumber('approval')->name('kelulusan.tolak');
     });
 
-    // Tutup Tahun & Kawalan Dalaman — aras MASJID: senarai (BACA) terbuka; TULIS = bendahari.
+    // Tutup Tahun & Kawalan Dalaman — aras MASJID: senarai (BACA) terbuka; TULIS = bendahari & pentadbir.
     Route::get('/tetapan/tutup-tahun', [TutupTahunController::class, 'index'])->name('tutuptahun.index');
     Route::get('/tetapan/kawalan', [KawalanController::class, 'index'])->name('kawalan.index');
-    Route::middleware('role:bendahari')->group(function () {
+    Route::middleware('role:bendahari,pentadbir')->group(function () {
         Route::post('/tetapan/tutup-tahun', [TutupTahunController::class, 'tutup'])->name('tutuptahun.tutup');
         Route::post('/tetapan/kawalan', [KawalanController::class, 'simpan'])->name('kawalan.simpan');
     });

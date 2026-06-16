@@ -5,6 +5,7 @@ namespace App\Enums;
 enum UserRole: string
 {
     case ADMIN      = 'admin';
+    case PENTADBIR  = 'pentadbir';   // Pentadbir Masjid — pentadbir SATU masjid (tetapan + pengguna), bukan rekod kewangan
     case BENDAHARI  = 'bendahari';
     case PENGERUSI  = 'pengerusi';
     case SETIAUSAHA = 'setiausaha';
@@ -14,7 +15,8 @@ enum UserRole: string
     public function label(): string
     {
         return match ($this) {
-            self::ADMIN      => 'Admin',
+            self::ADMIN      => 'Admin Sistem',
+            self::PENTADBIR  => 'Pentadbir Masjid',
             self::BENDAHARI  => 'Bendahari',
             self::PENGERUSI  => 'Pengerusi',
             self::SETIAUSAHA => 'Setiausaha',

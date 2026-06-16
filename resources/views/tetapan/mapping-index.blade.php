@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $bolehTulis = (bool) auth()->user()?->bolehTulis();
+    $bolehTulis = (bool) auth()->user()?->bolehUrusMasjid();
     $jenisLabel = ['penerimaan' => 'Penerimaan', 'perbelanjaan' => 'Perbelanjaan', 'kedua' => 'Kedua-dua'];
 @endphp
 

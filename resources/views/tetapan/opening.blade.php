@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $bolehTulis = (bool) auth()->user()?->bolehTulis();
+    $bolehTulis = (bool) auth()->user()?->bolehUrusMasjid();
     $rowsAwal = $baris->map(fn ($b) => [
         'coa_id' => (string) $b->coa_id,
         'amaun'  => (string) $b->amaun,

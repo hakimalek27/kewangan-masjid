@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $bolehTulis = (bool) auth()->user()?->bolehTulis();
+    $bolehTulis = (bool) auth()->user()?->bolehUrusMasjid();
 @endphp
 
 <div class="card shadow-sm mb-4">

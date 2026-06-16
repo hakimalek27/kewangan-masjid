@@ -35,6 +35,7 @@ class RoleLandingTest extends TestCase
     {
         $jangka = [
             'admin'      => route('sistem.console'),
+            'pentadbir'  => route('dashboard'),
             'bendahari'  => route('dashboard'),
             'pengerusi'  => route('dashboard'),
             'setiausaha' => route('dashboard'),
