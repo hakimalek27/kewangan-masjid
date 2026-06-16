@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $bolehTulis = in_array(auth()->user()?->role?->value, ['admin', 'bendahari'], true);
+    $bolehTulis = (bool) auth()->user()?->bolehTulis();
     $rowsAwal = $baris->map(fn ($b) => [
         'coa_id' => (string) $b->coa_id,
         'amaun'  => (string) $b->amaun,

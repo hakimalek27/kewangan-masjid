@@ -77,13 +77,8 @@ class BakiRendahDanaTest extends TestCase
 
     public function test_simpan_ambang_melalui_kawalan(): void
     {
-        $admin = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_br_adm_'.uniqid(),
-            'nama_penuh' => 'Admin', 'role' => 'admin',
-            'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
-        ]);
-
-        $this->actingAs($admin)->post(route('kawalan.simpan'), [
+        // Kawalan dalaman = tetapan aras-masjid → dikemaskini oleh BENDAHARI (bukan admin sistem).
+        $this->actingAs($this->bendahari)->post(route('kawalan.simpan'), [
             'approval_threshold' => '0',
             'baki_rendah_ambang' => '5000',
         ])->assertRedirect(route('kawalan.index'));

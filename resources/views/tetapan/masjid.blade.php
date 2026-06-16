@@ -5,6 +5,8 @@
 @section('content')
 @php
     $isAdmin = auth()->user()?->role?->value === 'admin';
+    // Edit profil masjid = aras masjid (bendahari & setiausaha). Masjid Baru / Sedia COA = admin (sistem).
+    $bolehEditInfo = (bool) auth()->user()?->bolehTulisDaftar();
 @endphp
 
 @if ($isAdmin && ($bilCoa ?? 1) === 0)
@@ -50,9 +52,9 @@
     </div>
 </div>
 
-@if ($isAdmin)
+@if ($bolehEditInfo)
 <div class="card shadow-sm">
-    <div class="card-header fw-bold">{{ __('Edit Info Masjid (Admin)') }}</div>
+    <div class="card-header fw-bold">{{ __('Edit Info Masjid') }}</div>
     <div class="card-body">
         <form method="POST" action="{{ route('tetapan.masjid.kemaskini') }}">
             @csrf

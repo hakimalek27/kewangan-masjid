@@ -29,6 +29,9 @@ class MasjidSwitchController extends Controller
         $request->session()->put('selected_masjid_id', $target);
         Masjid::lupakanSemasa();
 
-        return redirect()->back()->with('success', 'Masjid aktif ditukar.');
+        // Konsol Sistem (admin) hantar ke=dashboard supaya "Masuk" mendarat di dashboard masjid.
+        return $request->input('ke') === 'dashboard'
+            ? redirect()->route('dashboard')->with('success', 'Masjid aktif ditukar.')
+            : redirect()->back()->with('success', 'Masjid aktif ditukar.');
     }
 }

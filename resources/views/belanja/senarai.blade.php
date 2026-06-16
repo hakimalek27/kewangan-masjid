@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $bolehTulis = in_array(auth()->user()?->role?->value, ['admin', 'bendahari'], true);
+    $bolehTulis = (bool) auth()->user()?->bolehTulis();
 @endphp
 
 <div class="card shadow-sm mb-3 no-print">

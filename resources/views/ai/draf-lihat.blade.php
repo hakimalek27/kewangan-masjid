@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $bolehTulis = in_array(auth()->user()?->role?->value, ['admin', 'bendahari'], true);
+    $bolehTulis = (bool) auth()->user()?->bolehTulis();
     $conf = (int) ($extraction->confidence ?? 0);
     $warnaConf = $conf >= 80 ? 'success' : ($conf >= 50 ? 'warning' : 'danger');
 @endphp

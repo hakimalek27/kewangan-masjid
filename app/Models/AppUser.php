@@ -69,8 +69,15 @@ class AppUser extends Authenticatable
         return $this->role === UserRole::ADMIN;
     }
 
+    /** Boleh TULIS kewangan (maker) — BENDAHARI sahaja. Admin = sistem (tiada tulis kewangan). */
     public function bolehTulis(): bool
     {
-        return in_array($this->role, [UserRole::ADMIN, UserRole::BENDAHARI], true);
+        return $this->role === UserRole::BENDAHARI;
+    }
+
+    /** Boleh tulis daftar BUKAN-kewangan (sewa, peti besi, info masjid) — bendahari & setiausaha. */
+    public function bolehTulisDaftar(): bool
+    {
+        return in_array($this->role, [UserRole::BENDAHARI, UserRole::SETIAUSAHA], true);
     }
 }

@@ -60,6 +60,9 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // Konsol Sistem — pendaratan admin (pentadbir platform), pandangan merentas semua masjid.
+    Route::middleware('role:admin')->get('/sistem', [\App\Http\Controllers\Web\SistemController::class, 'index'])->name('sistem.console');
+
     // Penukar masjid aktif (admin: semua; pemerhati: masjid ditugaskan) — tulis sesi sahaja
     Route::post('/masjid/tukar', [MasjidSwitchController::class, 'tukar'])->name('masjid.tukar');
 
@@ -67,7 +70,7 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::get('/draf', [DrafController::class, 'index'])->name('draf.index');
     Route::get('/draf/{draf}', [DrafController::class, 'lihat'])->whereNumber('draf')->name('draf.lihat');
     Route::get('/draf/{draf}/imej', [DrafController::class, 'imej'])->whereNumber('draf')->name('draf.imej');
-    Route::middleware('role:admin,bendahari')->group(function () {
+    Route::middleware('role:bendahari')->group(function () {
         Route::post('/draf/{draf}/sahkan', [DrafController::class, 'sahkan'])->whereNumber('draf')->name('draf.sahkan');
         Route::post('/draf/{draf}/tolak', [DrafController::class, 'tolak'])->whereNumber('draf')->name('draf.tolak');
     });
@@ -137,10 +140,10 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::get('/sewa/{sewaan}/edit', [SewaanController::class, 'edit'])->whereNumber('sewaan')->name('sewa.edit');
 
     /*
-     | Route TULIS (POST) — admin & bendahari sahaja. Semua mutasi kewangan
-     | melalui service (KutipanService/PembayaranService/FdService/dll).
+     | Route TULIS kewangan (POST) — BENDAHARI sahaja (maker). Admin = sistem,
+     | TIDAK merekod kewangan. Semua mutasi melalui service.
      */
-    Route::middleware('role:admin,bendahari')->group(function () {
+    Route::middleware('role:bendahari')->group(function () {
         // Kutipan
         Route::post('/kutipan/baru', [KutipanController::class, 'simpan'])->name('kutipan.simpan');
         Route::post('/kutipan/tabung', [TabungController::class, 'simpan'])->name('kutipan.tabung.simpan');
@@ -163,9 +166,13 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/fd/{fd}/renew', [FdController::class, 'renew'])->whereNumber('fd')->name('fd.renew');
         Route::post('/fd/{fd}/padam', [FdController::class, 'padam'])->whereNumber('fd')->name('fd.padam');
 
-        // Register tanpa GL
+        // Register Cek (kewangan)
         Route::post('/cek/daftar', [BukuCekController::class, 'simpan'])->name('cek.simpan');
         Route::post('/cek-batal/daftar', [CekBatalController::class, 'simpan'])->name('cekbatal.simpan');
+    });
+
+    // Daftar BUKAN-kewangan (sewa, peti besi) — bendahari & SETIAUSAHA
+    Route::middleware('role:bendahari,setiausaha')->group(function () {
         Route::post('/peti-besi/daftar', [PetiBesiController::class, 'simpan'])->name('petibesi.simpan');
         Route::post('/sewa/daftar', [SewaanController::class, 'simpan'])->name('sewa.simpan');
         Route::post('/sewa/{sewaan}/kemaskini', [SewaanController::class, 'kemaskini'])->whereNumber('sewaan')->name('sewa.kemaskini');
@@ -196,8 +203,8 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::get('/akaun/kunci-kira-kira', [PerakaunanController::class, 'kunci'])->name('akaun.kunci');
     Route::get('/akaun/program', [PerakaunanController::class, 'program'])->name('akaun.program');
 
-    // Batal jurnal (VOID) — admin & bendahari sahaja
-    Route::middleware('role:admin,bendahari')->group(function () {
+    // Batal jurnal (VOID) — bendahari sahaja
+    Route::middleware('role:bendahari')->group(function () {
         Route::post('/akaun/jurnal/{voucher}/batal', [PerakaunanController::class, 'jurnalBatal'])
             ->whereNumber('voucher')->name('akaun.jurnal.batal');
     });
@@ -215,10 +222,10 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::post('/tetapan/kata-laluan', [KataLaluanController::class, 'kemaskini'])->name('tetapan.katalaluan.kemaskini');
 
     /*
-     | Fasa 4 — Tetapan: laluan TULIS (POST) & halaman edit — admin/bendahari.
-     | Pengecualian: Info Masjid & Pengurusan Pengguna (admin sahaja, di bawah).
+     | Fasa 4 — Tetapan kewangan masjid: TULIS (POST) & halaman edit — BENDAHARI sahaja.
+     | Info Masjid (bendahari+setiausaha) & Pengurusan Pengguna (admin+bendahari) di bawah.
      */
-    Route::middleware('role:admin,bendahari')->group(function () {
+    Route::middleware('role:bendahari')->group(function () {
         // Setting Bank — "Padam" = nyahaktif (rekod mungkin dirujuk transaksi)
         Route::get('/bank/{bank}/edit', [BankController::class, 'edit'])->whereNumber('bank')->name('bank.edit');
         Route::post('/bank', [BankController::class, 'simpan'])->name('bank.simpan');
@@ -252,7 +259,7 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::middleware('role:admin')->prefix('admin')->group(function () {
         Route::get('/pemantauan', [PemantauanController::class, 'index'])->name('admin.pemantauan');
 
-        Route::get('/audit', [AuditController::class, 'index'])->name('admin.audit');
+        // Jejak audit: BACA juga dibenarkan juruaudit (kumpulan role:admin,juruaudit di bawah).
         Route::post('/audit/sahkan', [AuditController::class, 'sahkan'])->name('admin.audit.sahkan');
 
         Route::get('/ralat', [RalatController::class, 'index'])->name('admin.ralat');
@@ -273,10 +280,26 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/dual-write/tertunggak', [DualWriteController::class, 'tertunggak'])->name('admin.dualwrite.tertunggak');
     });
 
-    // Fasa 4 — Tetapan: admin sahaja
-    Route::middleware('role:admin')->group(function () {
-        Route::post('/tetapan/masjid', [MasjidController::class, 'kemaskini'])->name('tetapan.masjid.kemaskini');
+    // Jejak audit (BACA) — admin + JURUAUDIT (semakan bebas); pengesahan POST kekal admin.
+    Route::middleware('role:admin,juruaudit')->prefix('admin')->group(function () {
+        Route::get('/audit', [AuditController::class, 'index'])->name('admin.audit');
+    });
 
+    // Info Masjid (edit profil) — aras MASJID: bendahari & setiausaha.
+    Route::middleware('role:bendahari,setiausaha')->group(function () {
+        Route::post('/tetapan/masjid', [MasjidController::class, 'kemaskini'])->name('tetapan.masjid.kemaskini');
+    });
+
+    // Pengurusan Pengguna — admin (semua masjid) + bendahari (masjid SENDIRI, diskop dlm controller).
+    Route::middleware('role:admin,bendahari')->group(function () {
+        Route::get('/tetapan/pengguna', [PenggunaController::class, 'index'])->name('tetapan.pengguna');
+        Route::get('/tetapan/pengguna/{pengguna}/edit', [PenggunaController::class, 'edit'])->whereNumber('pengguna')->name('tetapan.pengguna.edit');
+        Route::post('/tetapan/pengguna', [PenggunaController::class, 'simpan'])->name('tetapan.pengguna.simpan');
+        Route::post('/tetapan/pengguna/{pengguna}/kemaskini', [PenggunaController::class, 'kemaskini'])->whereNumber('pengguna')->name('tetapan.pengguna.kemaskini');
+    });
+
+    // Tetapan SISTEM (onboarding masjid + API awam) — ADMIN SAHAJA.
+    Route::middleware('role:admin')->group(function () {
         // Phase B — daftar masjid baharu + login bendahari pertama (onboarding multi-masjid)
         Route::get('/tetapan/masjid-baru', [MasjidController::class, 'baru'])->name('tetapan.masjid.baru');
         Route::post('/tetapan/masjid-baru', [MasjidController::class, 'ciptaMasjid'])->name('tetapan.masjid.baru.simpan');
@@ -290,11 +313,6 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/tetapan/api/klien/{client}/toggle', [TetapanApiController::class, 'klienToggle'])->whereNumber('client')->name('tetapan.api.klien.toggle');
         Route::post('/tetapan/api/webhook', [TetapanApiController::class, 'webhookSimpan'])->name('tetapan.api.webhook');
         Route::post('/tetapan/api/webhook/{subscription}/padam', [TetapanApiController::class, 'webhookPadam'])->whereNumber('subscription')->name('tetapan.api.webhook.padam');
-
-        Route::get('/tetapan/pengguna', [PenggunaController::class, 'index'])->name('tetapan.pengguna');
-        Route::get('/tetapan/pengguna/{pengguna}/edit', [PenggunaController::class, 'edit'])->whereNumber('pengguna')->name('tetapan.pengguna.edit');
-        Route::post('/tetapan/pengguna', [PenggunaController::class, 'simpan'])->name('tetapan.pengguna.simpan');
-        Route::post('/tetapan/pengguna/{pengguna}/kemaskini', [PenggunaController::class, 'kemaskini'])->whereNumber('pengguna')->name('tetapan.pengguna.kemaskini');
     });
 
     /*
@@ -313,7 +331,10 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
     Route::get('/dana/semak', [DanaController::class, 'semak'])->name('dana.semak');
     Route::get('/susut-nilai', [SusutNilaiController::class, 'index'])->name('susutnilai.index');
 
-    Route::middleware('role:admin,bendahari')->group(function () {
+    // Rekonsiliasi Bank — senarai (BACA) terbuka; tindakan (POST) = bendahari (bawah).
+    Route::get('/rekonsiliasi', [RekonsiliasiController::class, 'index'])->name('rekonsiliasi.index');
+
+    Route::middleware('role:bendahari')->group(function () {
         Route::post('/belanjawan', [BelanjawanController::class, 'simpan'])->name('belanjawan.simpan');
         Route::post('/dana', [DanaController::class, 'simpan'])->name('dana.simpan');
 
@@ -321,8 +342,7 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/susut-nilai/jana', [SusutNilaiController::class, 'jana'])->name('susutnilai.jana');
         Route::post('/susut-nilai/{aset}/lupus', [SusutNilaiController::class, 'lupus'])->whereNumber('aset')->name('susutnilai.lupus');
 
-        // Rekonsiliasi Bank
-        Route::get('/rekonsiliasi', [RekonsiliasiController::class, 'index'])->name('rekonsiliasi.index');
+        // Rekonsiliasi Bank (tindakan)
         Route::post('/rekonsiliasi/import', [RekonsiliasiController::class, 'import'])->name('rekonsiliasi.import');
         Route::post('/rekonsiliasi/{line}/padan', [RekonsiliasiController::class, 'padan'])->whereNumber('line')->name('rekonsiliasi.padan');
         Route::post('/rekonsiliasi/{line}/abaikan', [RekonsiliasiController::class, 'abaikan'])->whereNumber('line')->name('rekonsiliasi.abaikan');
@@ -331,18 +351,19 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         Route::post('/draf/bulk-sahkan', [DrafBulkController::class, 'sahkan'])->name('draf.bulk');
     });
 
-    // Kelulusan Maker-Checker — admin & pengerusi
-    Route::middleware('role:admin,pengerusi')->group(function () {
-        Route::get('/kelulusan', [KelulusanController::class, 'index'])->name('kelulusan.index');
+    // Kelulusan Maker-Checker — senarai (BACA) terbuka; LULUS/TOLAK = PENGERUSI sahaja
+    // (checker). Admin BUKAN pelulus (pengasingan tugas).
+    Route::get('/kelulusan', [KelulusanController::class, 'index'])->name('kelulusan.index');
+    Route::middleware('role:pengerusi')->group(function () {
         Route::post('/kelulusan/{approval}/lulus', [KelulusanController::class, 'lulus'])->whereNumber('approval')->name('kelulusan.lulus');
         Route::post('/kelulusan/{approval}/tolak', [KelulusanController::class, 'tolak'])->whereNumber('approval')->name('kelulusan.tolak');
     });
 
-    // Tutup Tahun & Kawalan Dalaman — admin sahaja
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/tetapan/tutup-tahun', [TutupTahunController::class, 'index'])->name('tutuptahun.index');
+    // Tutup Tahun & Kawalan Dalaman — aras MASJID: senarai (BACA) terbuka; TULIS = bendahari.
+    Route::get('/tetapan/tutup-tahun', [TutupTahunController::class, 'index'])->name('tutuptahun.index');
+    Route::get('/tetapan/kawalan', [KawalanController::class, 'index'])->name('kawalan.index');
+    Route::middleware('role:bendahari')->group(function () {
         Route::post('/tetapan/tutup-tahun', [TutupTahunController::class, 'tutup'])->name('tutuptahun.tutup');
-        Route::get('/tetapan/kawalan', [KawalanController::class, 'index'])->name('kawalan.index');
         Route::post('/tetapan/kawalan', [KawalanController::class, 'simpan'])->name('kawalan.simpan');
     });
 });

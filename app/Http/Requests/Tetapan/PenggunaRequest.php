@@ -12,9 +12,22 @@ use Illuminate\Validation\Rule;
  */
 class PenggunaRequest extends BaseFormRequest
 {
+    public function authorize(): bool
+    {
+        $pengguna = $this->route('pengguna');
+        if (! $pengguna || $this->user()?->isAdmin()) {
+            return true;
+        }
+
+        // Bukan-admin (bendahari): hanya urus pengguna masjid SENDIRI & BUKAN akaun admin (anti-IDOR).
+        return (int) $pengguna->masjid_id === (int) app('current.masjid_id')
+            && $pengguna->role !== UserRole::ADMIN;
+    }
+
     public function rules(): array
     {
         $edit = $this->route('pengguna') !== null;
+        $isAdmin = (bool) $this->user()?->isAdmin();
 
         return [
             'login' => [
@@ -22,13 +35,25 @@ class PenggunaRequest extends BaseFormRequest
                 Rule::unique('app_user', 'login')->ignore($this->route('pengguna')?->id),
             ],
             'nama_penuh'   => ['required', 'string', 'max:200'],
-            'role'         => ['required', Rule::enum(UserRole::class)],
-            'masjid_id'    => ['required', 'integer', Rule::exists('masjid', 'id')],
+            // Bukan-admin TIDAK boleh melantik peranan 'admin'.
+            'role'         => ['required', Rule::in($this->perananDibenarkan())],
+            // Admin pilih masjid; bukan-admin dipaksa ke masjid semasa dalam controller.
+            'masjid_id'    => $isAdmin ? ['required', 'integer', Rule::exists('masjid', 'id')] : ['nullable', 'integer'],
             'masjid_ids'   => ['nullable', 'array'],
             'masjid_ids.*' => ['integer', Rule::exists('masjid', 'id')],
             'kata_laluan'  => [$edit ? 'nullable' : 'required', 'string', 'min:6'],
             'is_active'    => ['nullable', 'boolean'],
         ];
+    }
+
+    /** Peranan yang pemohon dibenarkan melantik (bukan-admin tidak boleh 'admin'). */
+    private function perananDibenarkan(): array
+    {
+        $cases = $this->user()?->isAdmin()
+            ? UserRole::cases()
+            : array_filter(UserRole::cases(), fn (UserRole $r) => $r !== UserRole::ADMIN);
+
+        return array_map(fn (UserRole $r) => $r->value, $cases);
     }
 
     public function attributes(): array

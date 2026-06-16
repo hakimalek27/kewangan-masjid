@@ -61,8 +61,13 @@ class LoginController extends Controller
         $request->session()->regenerate();
         $user->update(['last_login_at' => now()]);
 
-        // Pemerhati = penyata sahaja → mendarat terus di Penyata Bulanan (elak lantunan ke dashboard).
-        $landing = $user->role === UserRole::VIEWER ? route('penyata.bulanan') : route('dashboard');
+        // Pendaratan ikut peranan: pemerhati → penyata; admin → Konsol Sistem (platform);
+        // lain (bendahari/pengerusi/setiausaha/juruaudit) → dashboard kewangan masjid.
+        $landing = match ($user->role) {
+            UserRole::VIEWER => route('penyata.bulanan'),
+            UserRole::ADMIN  => route('sistem.console'),
+            default          => route('dashboard'),
+        };
 
         return redirect()->intended($landing);
     }

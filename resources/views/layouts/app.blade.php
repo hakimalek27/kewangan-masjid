@@ -64,15 +64,34 @@
                 } catch (\Throwable) { $kelulusanBelum = 0; }
             @endphp
             @php
-                // Pemerhati (viewer) = penyata sahaja → tapis menu kepada kumpulan Penyata.
                 $peranan = auth()->user()?->role?->value;
                 $viewerRoutes = ['penyata.bulanan', 'penyata.bank', 'penyata.tahunan'];
+                // Item menu DIHADKAN ikut peranan (route sistem/khas). Item lain → semua boleh lihat.
+                $menuHad = [
+                    'admin.pemantauan'  => ['admin'],
+                    'admin.audit'       => ['admin', 'juruaudit'], // juruaudit baca jejak audit
+                    'admin.ralat'       => ['admin'],
+                    'admin.keselamatan' => ['admin'],
+                    'admin.backup'      => ['admin'],
+                    'admin.dualwrite'   => ['admin'],
+                    'tetapan.ai'        => ['admin'],
+                    'tetapan.api'       => ['admin'],
+                    'tetapan.pengguna'  => ['admin', 'bendahari'],
+                ];
             @endphp
             @foreach (config('sppkms.menu') as $i => $group)
                 @php
-                    $items = $peranan === 'viewer'
-                        ? array_values(array_filter($group['items'], fn ($it) => in_array($it[1], $viewerRoutes, true)))
-                        : $group['items'];
+                    $items = $group['items'];
+                    // Admin: pautan Konsol Sistem di puncak kumpulan Dashboard.
+                    if ($peranan === 'admin' && ($group['label'] ?? '') === 'Dashboard') {
+                        $items = array_merge([['Konsol Sistem', 'sistem.console']], $items);
+                    }
+                    if ($peranan === 'viewer') {
+                        $items = array_filter($items, fn ($it) => in_array($it[1], $viewerRoutes, true));
+                    } else {
+                        $items = array_filter($items, fn ($it) => ! isset($menuHad[$it[1]]) || in_array($peranan, $menuHad[$it[1]], true));
+                    }
+                    $items = array_values($items);
                 @endphp
                 @continue(empty($items))
                 @if (count($items) === 1)

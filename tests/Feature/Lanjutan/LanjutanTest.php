@@ -39,6 +39,7 @@ class LanjutanTest extends TestCase
 
     private AppUser $admin;
     private AppUser $bendahari;
+    private AppUser $pengerusi;
     private BankAccount $bank;
 
     protected function setUp(): void
@@ -53,6 +54,7 @@ class LanjutanTest extends TestCase
         ]);
         $this->admin = $buat('admin');
         $this->bendahari = $buat('bendahari');
+        $this->pengerusi = $buat('pengerusi');
         $this->bank = BankAccount::withoutMasjidScope()
             ->where('masjid_id', config('sppkms.masjid_id'))
             ->where('status', 'AKTIF')->firstOrFail();
@@ -231,8 +233,8 @@ class LanjutanTest extends TestCase
             'TIADA pembayaran boleh wujud sebelum kelulusan',
         );
 
-        // Admin meluluskan → pembayaran + jurnal wujud
-        $this->actingAs($this->admin)
+        // Pengerusi (checker) meluluskan → pembayaran + jurnal wujud (admin BUKAN pelulus)
+        $this->actingAs($this->pengerusi)
             ->post(route('kelulusan.lulus', $approval->id))
             ->assertRedirect(route('kelulusan.index'));
 
@@ -285,7 +287,7 @@ class LanjutanTest extends TestCase
             'Tiada row attachment sebelum kelulusan');
 
         // Admin luluskan → pembayaran + attachment BAYARAN dipautkan ke fail yg SAMA.
-        $this->actingAs($this->admin)->post(route('kelulusan.lulus', $approval->id))
+        $this->actingAs($this->pengerusi)->post(route('kelulusan.lulus', $approval->id))
             ->assertRedirect(route('kelulusan.index'));
 
         $pembayaran = Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN LAMPIRAN MC')->firstOrFail();
@@ -319,7 +321,7 @@ class LanjutanTest extends TestCase
         Storage::disk('local')->assertExists($stash);
 
         // Tolak → fail distash dibuang, tiada pembayaran tercipta.
-        $this->actingAs($this->admin)->post(route('kelulusan.tolak', $approval->id), ['sebab' => 'Tidak lengkap'])
+        $this->actingAs($this->pengerusi)->post(route('kelulusan.tolak', $approval->id), ['sebab' => 'Tidak lengkap'])
             ->assertRedirect(route('kelulusan.index'));
 
         Storage::disk('local')->assertMissing($stash);
@@ -352,13 +354,13 @@ class LanjutanTest extends TestCase
     public function test_kawalan_toggle_kelulusan_disimpan(): void
     {
         // Suis bertanda → hantar '1' → 'on'
-        $this->actingAs($this->admin)->post(route('kawalan.simpan'), [
+        $this->actingAs($this->bendahari)->post(route('kawalan.simpan'), [
             'approval_enabled' => '1', 'approval_threshold' => '100', 'baki_rendah_ambang' => '0',
         ])->assertRedirect(route('kawalan.index'));
         $this->assertSame('on', Setting::get(ApprovalService::KEY_ENABLED));
 
         // Suis TAK bertanda → medan tersembunyi hantar '0' → 'off'
-        $this->actingAs($this->admin)->post(route('kawalan.simpan'), [
+        $this->actingAs($this->bendahari)->post(route('kawalan.simpan'), [
             'approval_enabled' => '0', 'approval_threshold' => '100', 'baki_rendah_ambang' => '0',
         ])->assertRedirect(route('kawalan.index'));
         $this->assertSame('off', Setting::get(ApprovalService::KEY_ENABLED));

@@ -50,7 +50,12 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->redirectGuestsTo(fn () => route('login'));
-        $middleware->redirectUsersTo(fn () => route('dashboard'));
+        // Pendaratan pengguna sudah-log-masuk ikut peranan (selaras LoginController).
+        $middleware->redirectUsersTo(fn (Request $request) => match ($request->user()?->role) {
+            \App\Enums\UserRole::VIEWER => route('penyata.bulanan'),
+            \App\Enums\UserRole::ADMIN  => route('sistem.console'),
+            default                     => route('dashboard'),
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         /*
