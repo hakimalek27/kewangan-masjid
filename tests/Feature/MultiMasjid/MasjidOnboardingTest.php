@@ -4,7 +4,9 @@ namespace Tests\Feature\MultiMasjid;
 
 use App\Models\AppUser;
 use App\Models\Masjid;
+use App\Services\Tetapan\CoaTemplateService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\MasjidContext;
 use Tests\TestCase;
@@ -52,6 +54,25 @@ class MasjidOnboardingTest extends TestCase
         $this->assertSame('bendahari', $bdh->role->value);
         // Bendahari baharu terpencil ke masjid baharu sahaja
         $this->assertSame([(int) $masjid->id], $bdh->accessibleMasjidIds());
+
+        // COA standard disemai → masjid baharu terus boleh berfungsi (bilangan sama dgn templat)
+        $bilTemplat = (int) DB::table('coa')->where('masjid_id', config('sppkms.masjid_id'))->count();
+        $bilBaharu = (int) DB::table('coa')->where('masjid_id', $masjid->id)->count();
+        $this->assertGreaterThan(0, $bilBaharu, 'Masjid baharu mesti dapat COA standard');
+        $this->assertSame($bilTemplat, $bilBaharu, 'COA masjid baharu mesti sama bilangan dgn templat');
+    }
+
+    public function test_semai_coa_idempoten(): void
+    {
+        $svc = app(CoaTemplateService::class);
+        $masjidId = (int) Masjid::create(['nama' => 'Masjid COA '.uniqid()])->id;
+
+        $bil1 = $svc->sediaUntukMasjid($masjidId);
+        $this->assertGreaterThan(0, $bil1, 'Semaian pertama mesti cipta akaun');
+
+        $bil2 = $svc->sediaUntukMasjid($masjidId); // kedua kali → tiada gandaan
+        $this->assertSame(0, $bil2, 'Semaian kedua mesti idempoten (0)');
+        $this->assertSame($bil1, (int) DB::table('coa')->where('masjid_id', $masjidId)->count());
     }
 
     public function test_bukan_admin_tidak_boleh_onboard(): void

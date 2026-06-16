@@ -280,6 +280,8 @@ Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
         // Phase B — daftar masjid baharu + login bendahari pertama (onboarding multi-masjid)
         Route::get('/tetapan/masjid-baru', [MasjidController::class, 'baru'])->name('tetapan.masjid.baru');
         Route::post('/tetapan/masjid-baru', [MasjidController::class, 'ciptaMasjid'])->name('tetapan.masjid.baru.simpan');
+        // Phase B follow-up — semai COA standard untuk masjid aktif yang kosong
+        Route::post('/tetapan/masjid/sedia-coa', [MasjidController::class, 'sediaCoa'])->name('tetapan.masjid.sediacoa');
 
         // Fasa 6 — API Awam: klien API, webhook, log panggilan
         Route::get('/tetapan/api', [TetapanApiController::class, 'index'])->name('tetapan.api');

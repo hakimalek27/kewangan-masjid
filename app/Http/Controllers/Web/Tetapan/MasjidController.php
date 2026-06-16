@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Tetapan\MasjidBaruRequest;
 use App\Http\Requests\Tetapan\MasjidRequest;
 use App\Models\AppUser;
+use App\Models\Coa;
 use App\Models\Masjid;
 use App\Services\Security\AuditTrailService;
+use App\Services\Tetapan\CoaTemplateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -17,8 +19,10 @@ use Illuminate\View\View;
 /** Info Masjid (replika paparMasjid.php) — papar profil; edit oleh admin sahaja. */
 class MasjidController extends Controller
 {
-    public function __construct(private AuditTrailService $audit)
-    {
+    public function __construct(
+        private AuditTrailService $audit,
+        private CoaTemplateService $coaTemplat,
+    ) {
     }
 
     public function index(): View
@@ -26,6 +30,7 @@ class MasjidController extends Controller
         return view('tetapan.masjid', [
             'masjid'   => Masjid::findOrFail((int) app('current.masjid_id')),
             'kategori' => \App\Http\Requests\Tetapan\MasjidRequest::KATEGORI,
+            'bilCoa'   => Coa::count(), // skop masjid aktif — 0 = perlu semai COA
         ]);
     }
 
@@ -43,7 +48,7 @@ class MasjidController extends Controller
     {
         $data = $request->validated();
 
-        $bendahari = DB::transaction(function () use ($data) {
+        $hasil = DB::transaction(function () use ($data) {
             $masjid = Masjid::create([
                 'nama'     => $data['nama'],
                 'kategori' => $data['kategori'] ?? null,
@@ -65,17 +70,36 @@ class MasjidController extends Controller
                 'is_active'     => 1,
             ]);
 
+            // Semai Carta Akaun standard supaya masjid baharu terus boleh berfungsi.
+            $bilCoa = $this->coaTemplat->sediaUntukMasjid($masjid->id);
+
             // Jejak audit di bawah masjid BAHARU (rekod permulaan jejaknya).
             $this->audit->log('CREATE', 'masjid', null, ['nama' => $masjid->nama], $masjid->id, null, $masjid->id);
             $this->audit->log('CREATE', 'app_user', null,
                 ['login' => $user->login, 'role' => 'bendahari'], $user->id, null, $masjid->id);
+            $this->audit->log('CREATE', 'coa', null, ['disemai' => $bilCoa, 'templat' => (int) config('sppkms.masjid_id')], null, null, $masjid->id);
 
-            return $user;
+            return ['masjid' => $masjid, 'user' => $user, 'coa' => $bilCoa];
         });
 
         return redirect()->route('tetapan.pengguna')->with('success',
-            "Masjid '".$bendahari->masjid->nama."' dicipta dengan bendahari '".$bendahari->login.
-            "'. Sila minta bendahari log masuk & sediakan COA/bank/baki awal melalui Wizard Setup.");
+            "Masjid '".$hasil['masjid']->nama."' dicipta — bendahari '".$hasil['user']->login."' + ".
+            $hasil['coa']." akaun COA standard disemai. Bendahari boleh log masuk & sediakan bank/baki awal melalui Wizard Setup.");
+    }
+
+    /** Phase B follow-up — semai COA standard untuk masjid AKTIF yang masih kosong (admin sahaja). */
+    public function sediaCoa(): RedirectResponse
+    {
+        $masjidId = (int) app('current.masjid_id');
+        $bil = $this->coaTemplat->sediaUntukMasjid($masjidId);
+
+        if ($bil > 0) {
+            $this->audit->log('CREATE', 'coa', null, ['disemai' => $bil], null, null, $masjidId);
+
+            return back()->with('success', "Berjaya semai {$bil} akaun COA standard untuk masjid ini.");
+        }
+
+        return back()->with('success', 'COA sudah wujud untuk masjid ini — tiada perubahan.');
     }
 
     public function kemaskini(MasjidRequest $request): RedirectResponse

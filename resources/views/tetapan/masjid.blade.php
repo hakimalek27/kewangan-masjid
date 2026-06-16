@@ -7,6 +7,15 @@
     $isAdmin = auth()->user()?->role?->value === 'admin';
 @endphp
 
+@if ($isAdmin && ($bilCoa ?? 1) === 0)
+    <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-exclamation-triangle me-1"></i>{{ __('Masjid ini belum mempunyai Carta Akaun (COA) — transaksi tidak boleh direkod tanpa COA.') }}</span>
+        <form method="POST" action="{{ route('tetapan.masjid.sediacoa') }}" class="m-0">@csrf
+            <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-list-columns me-1"></i>{{ __('Sedia COA Standard') }}</button>
+        </form>
+    </div>
+@endif
+
 <div class="card shadow-sm mb-4">
     <div class="card-header fw-bold d-flex justify-content-between align-items-center">
         <span>{{ __('Profil Masjid') }}</span>
