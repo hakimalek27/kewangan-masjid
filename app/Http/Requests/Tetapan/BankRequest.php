@@ -22,7 +22,7 @@ class BankRequest extends BaseFormRequest
             ],
             'nama_bank' => ['required', 'string', 'max:120'],
             'no_akaun'  => ['required', 'string', 'max:40'],
-            'coa_id'    => ['required', 'integer', Rule::exists('coa', 'id')->where('masjid_id', $masjidId)],
+            'coa_id'    => ['required', 'integer', $this->existsMasjid('coa')],
             'status'    => ['required', Rule::in(['AKTIF', 'TIDAK AKTIF'])],
             'digunakan' => ['nullable', 'boolean'],
         ];

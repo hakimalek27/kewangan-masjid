@@ -12,8 +12,8 @@ class JurnalRequest extends BaseFormRequest
         return [
             'tarikh'    => ['required', 'date'],
             'deskripsi' => ['required', 'string', 'max:500'],
-            'dr_coa_id' => ['required', 'integer', 'exists:coa,id'],
-            'cr_coa_id' => ['required', 'integer', 'exists:coa,id', 'different:dr_coa_id'],
+            'dr_coa_id' => ['required', 'integer', $this->existsMasjid('coa')],
+            'cr_coa_id' => ['required', 'integer', $this->existsMasjid('coa'), 'different:dr_coa_id'],
             'jumlah'    => ['required', 'numeric', 'min:0.01'],
         ];
     }

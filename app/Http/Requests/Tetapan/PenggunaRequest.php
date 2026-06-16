@@ -21,21 +21,27 @@ class PenggunaRequest extends BaseFormRequest
                 'required', 'string', 'max:60', 'alpha_dash',
                 Rule::unique('app_user', 'login')->ignore($this->route('pengguna')?->id),
             ],
-            'nama_penuh'  => ['required', 'string', 'max:200'],
-            'role'        => ['required', Rule::enum(UserRole::class)],
-            'kata_laluan' => [$edit ? 'nullable' : 'required', 'string', 'min:6'],
-            'is_active'   => ['nullable', 'boolean'],
+            'nama_penuh'   => ['required', 'string', 'max:200'],
+            'role'         => ['required', Rule::enum(UserRole::class)],
+            'masjid_id'    => ['required', 'integer', Rule::exists('masjid', 'id')],
+            'masjid_ids'   => ['nullable', 'array'],
+            'masjid_ids.*' => ['integer', Rule::exists('masjid', 'id')],
+            'kata_laluan'  => [$edit ? 'nullable' : 'required', 'string', 'min:6'],
+            'is_active'    => ['nullable', 'boolean'],
         ];
     }
 
     public function attributes(): array
     {
         return [
-            'login'       => 'Nama Log Masuk',
-            'nama_penuh'  => 'Nama Penuh',
-            'role'        => 'Peranan',
-            'kata_laluan' => 'Kata Laluan',
-            'is_active'   => 'Status Aktif',
+            'login'        => 'Nama Log Masuk',
+            'nama_penuh'   => 'Nama Penuh',
+            'role'         => 'Peranan',
+            'masjid_id'    => 'Masjid',
+            'masjid_ids'   => 'Masjid Ditugaskan',
+            'masjid_ids.*' => 'Masjid Ditugaskan',
+            'kata_laluan'  => 'Kata Laluan',
+            'is_active'    => 'Status Aktif',
         ];
     }
 

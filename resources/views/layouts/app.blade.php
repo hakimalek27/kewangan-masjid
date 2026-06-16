@@ -63,15 +63,26 @@
                         : 0;
                 } catch (\Throwable) { $kelulusanBelum = 0; }
             @endphp
+            @php
+                // Pemerhati (viewer) = penyata sahaja → tapis menu kepada kumpulan Penyata.
+                $peranan = auth()->user()?->role?->value;
+                $viewerRoutes = ['penyata.bulanan', 'penyata.bank', 'penyata.tahunan'];
+            @endphp
             @foreach (config('sppkms.menu') as $i => $group)
-                @if (count($group['items']) === 1)
-                    <a class="sidebar-link {{ request()->routeIs($group['items'][0][1]) ? 'active' : '' }}"
-                       href="{{ route($group['items'][0][1]) }}">
-                        <i class="bi {{ $group['icon'] }} me-2"></i>{{ __($group['items'][0][0]) }}
+                @php
+                    $items = $peranan === 'viewer'
+                        ? array_values(array_filter($group['items'], fn ($it) => in_array($it[1], $viewerRoutes, true)))
+                        : $group['items'];
+                @endphp
+                @continue(empty($items))
+                @if (count($items) === 1)
+                    <a class="sidebar-link {{ request()->routeIs($items[0][1]) ? 'active' : '' }}"
+                       href="{{ route($items[0][1]) }}">
+                        <i class="bi {{ $group['icon'] }} me-2"></i>{{ __($items[0][0]) }}
                     </a>
                 @else
                     @php
-                        $open = collect($group['items'])->contains(fn ($it) => request()->routeIs($it[1]));
+                        $open = collect($items)->contains(fn ($it) => request()->routeIs($it[1]));
                     @endphp
                     <a class="sidebar-link d-flex justify-content-between align-items-center {{ $open ? '' : 'collapsed' }}"
                        data-bs-toggle="collapse" href="#menu-{{ $i }}" role="button"
@@ -80,7 +91,7 @@
                         <i class="bi bi-chevron-down small"></i>
                     </a>
                     <div class="collapse {{ $open ? 'show' : '' }}" id="menu-{{ $i }}">
-                        @foreach ($group['items'] as [$label, $routeName])
+                        @foreach ($items as [$label, $routeName])
                             <a class="sidebar-sublink {{ request()->routeIs($routeName) ? 'active' : '' }}"
                                href="{{ route($routeName) }}">{{ __($label) }}
                                 @if ($routeName === 'draf.index' && $drafAiBelum > 0)
@@ -96,7 +107,7 @@
             @endforeach
         </div>
         <div class="p-3 small text-center sidebar-footer">
-            &copy; {{ date('Y') }} {{ auth()->user()?->masjid?->nama ?? '' }}
+            &copy; {{ date('Y') }} {{ $masjidSemasa?->nama ?? '' }}
         </div>
     </nav>
 
@@ -194,6 +205,29 @@
                             @endforelse
                         </ul>
                     </div>
+                @endauth
+
+                @auth
+                    @if (($masjidSenarai ?? collect())->count() > 1)
+                        <div class="dropdown">
+                            <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" title="{{ __('Tukar Masjid') }}">
+                                <i class="bi bi-building me-1"></i>{{ \Illuminate\Support\Str::limit($masjidSemasa?->nama ?? __('Masjid'), 16) }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow" style="max-height:360px; overflow-y:auto; min-width:240px">
+                                <li><h6 class="dropdown-header">{{ __('Tukar Masjid Aktif') }}</h6></li>
+                                @foreach ($masjidSenarai as $m)
+                                    <li>
+                                        <form method="POST" action="{{ route('masjid.tukar') }}" class="m-0">@csrf
+                                            <input type="hidden" name="masjid_id" value="{{ $m->id }}">
+                                            <button type="submit" class="dropdown-item {{ (int) ($masjidSemasa?->id) === (int) $m->id ? 'active' : '' }}">
+                                                @if ((int) ($masjidSemasa?->id) === (int) $m->id)<i class="bi bi-check2 me-1"></i>@endif{{ $m->nama }}
+                                            </button>
+                                        </form>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
                 @endauth
 
                 <div class="dropdown">

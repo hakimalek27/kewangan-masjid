@@ -11,6 +11,7 @@
                 <tr>
                     <th>{{ __('Log Masuk') }}</th>
                     <th>{{ __('Nama Penuh') }}</th>
+                    <th>{{ __('Masjid') }}</th>
                     <th>{{ __('Peranan') }}</th>
                     <th>{{ __('Status') }}</th>
                     <th>{{ __('Log Masuk Terakhir') }}</th>
@@ -22,6 +23,7 @@
                     <tr>
                         <td>{{ $u->login }}</td>
                         <td>{{ $u->nama_penuh }}</td>
+                        <td>{{ $u->masjid?->nama ?? '—' }}</td>
                         <td><span class="badge text-bg-secondary">{{ $u->role->label() }}</span></td>
                         <td><span class="badge {{ $u->is_active ? 'text-bg-success' : 'text-bg-danger' }}">{{ $u->is_active ? __('AKTIF') : __('TIDAK AKTIF') }}</span></td>
                         <td>{{ $u->last_login_at?->format('d/m/Y H:i') ?? '—' }}</td>
@@ -30,7 +32,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="text-center text-muted">{{ __('Tiada pengguna.') }}</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted">{{ __('Tiada pengguna.') }}</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -75,6 +77,30 @@
                     </div>
                 </div>
             </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label" for="masjid_id">{{ __('Masjid (asal)') }} <span class="text-danger">*</span></label>
+                        <select name="masjid_id" id="masjid_id" class="form-select" required>
+                            @foreach ($masjids as $m)
+                                <option value="{{ $m->id }}" @selected((int) old('masjid_id', app('current.masjid_id')) === (int) $m->id)>{{ $m->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <label class="form-label" for="masjid_ids">{{ __('Masjid Ditugaskan') }} <span class="text-muted small">{{ __('(untuk Pemerhati sahaja)') }}</span></label>
+                        <select name="masjid_ids[]" id="masjid_ids" class="form-select" multiple size="4">
+                            @foreach ($masjids as $m)
+                                <option value="{{ $m->id }}" @selected(in_array($m->id, old('masjid_ids', [])))>{{ $m->nama }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-text">{{ __('Tahan Ctrl/Cmd untuk pilih beberapa. Diabaikan jika peranan bukan Pemerhati.') }}</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1"
                        @checked(old('is_active', '1'))>

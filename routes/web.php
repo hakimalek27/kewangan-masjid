@@ -13,6 +13,7 @@ use App\Http\Controllers\Web\Belanja\BelanjaController;
 use App\Http\Controllers\Web\Belanja\JurnalController;
 use App\Http\Controllers\Web\Belanja\RekupmenController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\MasjidSwitchController;
 use App\Http\Controllers\Web\Kutipan\DividenController;
 use App\Http\Controllers\Web\Kutipan\KutipanController;
 use App\Http\Controllers\Web\Kutipan\TabungController;
@@ -55,9 +56,12 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth')->name('logout');
 
 // ---------- Aplikasi (perlu log masuk) ----------
-Route::middleware(['auth', 'masjid'])->group(function () {
+Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Penukar masjid aktif (admin: semua; pemerhati: masjid ditugaskan) — tulis sesi sahaja
+    Route::post('/masjid/tukar', [MasjidSwitchController::class, 'tukar'])->name('masjid.tukar');
 
     // Fasa 5 — Kotak Draf AI (Telegram → AI → draf → pengesahan bendahari)
     Route::get('/draf', [DrafController::class, 'index'])->name('draf.index');

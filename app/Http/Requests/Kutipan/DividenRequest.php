@@ -10,11 +10,11 @@ class DividenRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'fd_id'           => ['required', 'integer', 'exists:fd_investment,id'],
-            'coa_id'          => ['required', 'integer', 'exists:coa,id'],
+            'fd_id'           => ['required', 'integer', $this->existsMasjid('fd_investment')],
+            'coa_id'          => ['required', 'integer', $this->existsMasjid('coa')],
             'jumlah'          => ['required', 'numeric', 'min:0.01'],
             'tarikh'          => ['required', 'date'],
-            'bank_account_id' => ['required', 'integer', 'exists:bank_account,id'],
+            'bank_account_id' => ['required', 'integer', $this->existsMasjid('bank_account')],
             'auto_resit'      => ['nullable', 'boolean'],
             'no_resit'        => ['nullable', 'required_unless:auto_resit,1', 'string', 'max:30'],
             'deskripsi'       => ['nullable', 'string', 'max:500'],

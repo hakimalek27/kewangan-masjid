@@ -127,9 +127,10 @@ class WebFormTest extends TestCase
         $this->assertNull(Kutipan::withoutMasjidScope()->where('no_resit', 'UJI-VIEWER')->first());
     }
 
-    public function test_viewer_boleh_lihat_senarai(): void
+    public function test_viewer_dialih_dari_senarai_ke_penyata(): void
     {
-        $this->actingAs($this->viewer)->get(route('kutipan.senarai'))->assertOk();
+        // Pemerhati (Phase A) = penyata sahaja → senarai kutipan dialih ke penyata bulanan
+        $this->actingAs($this->viewer)->get(route('kutipan.senarai'))->assertRedirect(route('penyata.bulanan'));
     }
 
     public function test_medan_wajib_disekat(): void

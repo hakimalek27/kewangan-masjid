@@ -24,7 +24,7 @@ class MappingRequest extends BaseFormRequest
             'jenis_guna' => ['required', Rule::in(['penerimaan', 'perbelanjaan', 'kedua'])],
             'coa_id'     => [
                 'required', 'integer',
-                Rule::exists('coa', 'id')->where('masjid_id', $masjidId)->where('is_header', 0),
+                $this->existsMasjid('coa')->where('is_header', 0),
             ],
         ];
     }

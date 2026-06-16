@@ -301,9 +301,8 @@ class PerakaunanController extends Controller
 
     private function namaMasjid(): string
     {
-        return auth()->user()?->masjid?->nama
-            ?? Masjid::find(config('sppkms.masjid_id'))?->nama
-            ?? config('app.name');
+        // Masjid AKTIF (ikut pilihan switcher), bukan masjid asal pengguna.
+        return Masjid::semasa()?->nama ?? config('app.name');
     }
 
     private function eksport(string $format, string $namaFail, string $pdfView, array $data, array $headings, array $rows)

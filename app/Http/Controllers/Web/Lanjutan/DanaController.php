@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Coa;
 use App\Models\FundAccount;
 use App\Services\Lanjutan\FundService;
+use App\Support\MasjidRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -79,7 +80,7 @@ class DanaController extends Controller
     {
         $data = $request->validate([
             'id'            => ['nullable', 'integer'],
-            'coa_id'        => ['required_without:id', 'nullable', 'integer', 'exists:coa,id'],
+            'coa_id'        => ['required_without:id', 'nullable', 'integer', MasjidRule::exists('coa')],
             'nama'          => ['required', 'string', 'max:150'],
             'allow_deficit' => ['nullable', 'boolean'],
         ], [], ['coa_id' => 'Akaun Tabung (COA)', 'nama' => 'Nama Dana']);

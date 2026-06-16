@@ -8,6 +8,7 @@ use App\Models\Pembayaran;
 use App\Services\Laporan\ReportService;
 use App\Services\Transaksi\KutipanService;
 use App\Support\Setting;
+use App\Support\UserSetting;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\MasjidContext;
@@ -53,7 +54,7 @@ class PenyataGayaNotaTest extends TestCase
             ->assertOk()
             ->assertSee('PENYATA KEWANGAN BULANAN');
 
-        $this->assertSame('semasa', Setting::get('gaya_penyata'));
+        $this->assertSame('semasa', UserSetting::get('gaya_penyata', null, $this->bendahari->id)); // per-pengguna (user_setting)
 
         // Lawatan berikut TANPA ?gaya → pilihan kekal 'semasa'
         $this->actingAs($this->bendahari)->get(route('penyata.bulanan', ['bln' => 1, 'year' => 2026]))
@@ -63,6 +64,25 @@ class PenyataGayaNotaTest extends TestCase
         // Tukar semula ke v1
         $this->actingAs($this->bendahari)->get(route('penyata.bulanan', ['gaya' => 'v1']))
             ->assertOk()
+            ->assertDontSee('PENYATA KEWANGAN BULANAN');
+    }
+
+    public function test_gaya_per_pengguna_berasingan(): void
+    {
+        $userB = AppUser::create([
+            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_gaya_b_'.uniqid(),
+            'nama_penuh' => 'Ujian Gaya B', 'role' => 'bendahari',
+            'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
+        ]);
+
+        // User A pilih 'semasa'
+        $this->actingAs($this->bendahari)->get(route('penyata.bulanan', ['bln' => 1, 'year' => 2026, 'gaya' => 'semasa']))
+            ->assertOk()->assertSee('PENYATA KEWANGAN BULANAN');
+
+        // User B (tiada pilihan sendiri) → kekal lalai 'v1', TIDAK terjejas oleh pilihan A
+        $this->actingAs($userB)->get(route('penyata.bulanan', ['bln' => 1, 'year' => 2026]))
+            ->assertOk()
+            ->assertSee('PENYATA RINGKASAN TERIMAAN &amp; PERBELANJAAN', false)
             ->assertDontSee('PENYATA KEWANGAN BULANAN');
     }
 

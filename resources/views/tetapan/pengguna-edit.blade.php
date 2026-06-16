@@ -34,6 +34,30 @@
                     </div>
                 </div>
             </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label" for="masjid_id">{{ __('Masjid (asal)') }} <span class="text-danger">*</span></label>
+                        <select name="masjid_id" id="masjid_id" class="form-select" required>
+                            @foreach ($masjids as $m)
+                                <option value="{{ $m->id }}" @selected((int) old('masjid_id', $pengguna->masjid_id) === (int) $m->id)>{{ $m->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <label class="form-label" for="masjid_ids">{{ __('Masjid Ditugaskan') }} <span class="text-muted small">{{ __('(untuk Pemerhati sahaja)') }}</span></label>
+                        <select name="masjid_ids[]" id="masjid_ids" class="form-select" multiple size="4">
+                            @foreach ($masjids as $m)
+                                <option value="{{ $m->id }}" @selected(in_array($m->id, old('masjid_ids', $ditugas)))>{{ $m->nama }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-text">{{ __('Tahan Ctrl/Cmd untuk pilih beberapa. Diabaikan jika peranan bukan Pemerhati.') }}</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="mb-3">
                 <label class="form-label" for="kata_laluan">{{ __('Reset Kata Laluan (kosongkan jika tidak ditukar)') }}</label>
                 <input type="password" name="kata_laluan" id="kata_laluan" class="form-control"

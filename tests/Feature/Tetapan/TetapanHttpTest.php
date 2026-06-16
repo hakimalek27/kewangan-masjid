@@ -82,9 +82,10 @@ class TetapanHttpTest extends TestCase
         ]);
     }
 
-    public function test_viewer_boleh_lihat_bank_tetapi_tidak_boleh_menulis(): void
+    public function test_viewer_dialih_ke_penyata_dan_tak_boleh_menulis(): void
     {
-        $this->actingAs($this->viewer)->get(route('bank.index'))->assertOk();
+        // Pemerhati (Phase A) = penyata sahaja → halaman bukan-penyata dialih ke penyata bulanan
+        $this->actingAs($this->viewer)->get(route('bank.index'))->assertRedirect(route('penyata.bulanan'));
 
         $this->actingAs($this->viewer)->post(route('bank.simpan'), [
             'slot'      => 2,

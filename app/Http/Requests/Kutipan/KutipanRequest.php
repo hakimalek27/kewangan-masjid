@@ -19,7 +19,7 @@ class KutipanRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'coa_id'          => ['required', 'integer', 'exists:coa,id'],
+            'coa_id'          => ['required', 'integer', $this->existsMasjid('coa')],
             'kaedah'          => ['required', 'in:TUNAI,CEK,BANK_TRANSFER_QR'],
             'tarikh'          => ['required', 'date'],
             'jumlah'          => ['required', 'numeric', 'min:0.01'],
@@ -29,7 +29,7 @@ class KutipanRequest extends BaseFormRequest
             'saksi1'          => ['nullable', 'string', 'max:200'],
             'saksi2'          => ['nullable', 'string', 'max:200'],
             'saksi3'          => ['nullable', 'string', 'max:200'],
-            'bank_account_id' => ['nullable', 'required_unless:kaedah,TUNAI', 'integer', 'exists:bank_account,id'],
+            'bank_account_id' => ['nullable', 'required_unless:kaedah,TUNAI', 'integer', $this->existsMasjid('bank_account')],
             'no_slip'         => ['nullable', 'string', 'max:60'],
             'tar_bankin'      => ['nullable', 'date'],
             'deskripsi'       => ['nullable', 'string', 'max:500'],

@@ -30,7 +30,7 @@ class AuditController extends Controller
 
         return view('admin.audit', [
             'audit'     => $audit,
-            'pengguna'  => AppUser::orderBy('nama_penuh')->get(['id', 'nama_penuh']),
+            'pengguna'  => AppUser::where('masjid_id', (int) app('current.masjid_id'))->orderBy('nama_penuh')->get(['id', 'nama_penuh']),
             'entities'  => AuditTrail::query()->distinct()->orderBy('entity')->pluck('entity'),
             'actions'   => AuditTrail::query()->distinct()->orderBy('action')->pluck('action'),
         ]);

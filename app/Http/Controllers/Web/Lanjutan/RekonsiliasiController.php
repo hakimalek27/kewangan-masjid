@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BankAccount;
 use App\Models\BankStatementLine;
 use App\Services\Lanjutan\ReconciliationService;
+use App\Support\MasjidRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -76,7 +77,7 @@ class RekonsiliasiController extends Controller
     public function import(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'bank_account_id' => ['required', 'integer', 'exists:bank_account,id'],
+            'bank_account_id' => ['required', 'integer', MasjidRule::exists('bank_account')],
             'fail'            => ['required', 'file', 'max:5120', 'mimes:csv,txt'],
         ], [], ['bank_account_id' => 'Bank', 'fail' => 'Fail CSV Penyata']);
 

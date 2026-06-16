@@ -10,14 +10,12 @@ class OpeningBalanceRequest extends BaseFormRequest
 {
     public function rules(): array
     {
-        $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('sppkms.masjid_id');
-
         return [
             'tahun'          => ['required', 'integer', 'min:2000', 'max:2100'],
             'rows'           => ['required', 'array', 'min:1'],
             'rows.*.coa_id'  => [
                 'required', 'integer',
-                Rule::exists('coa', 'id')->where('masjid_id', $masjidId)->where('is_header', 0),
+                $this->existsMasjid('coa')->where('is_header', 0),
             ],
             'rows.*.amaun'   => ['required', 'numeric', 'min:0.01'],
             'rows.*.side'    => ['required', Rule::in(['D', 'C'])],

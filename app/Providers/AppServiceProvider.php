@@ -57,5 +57,22 @@ class AppServiceProvider extends ServiceProvider
          | dimemo per-permintaan & null-safe.
          */
         View::composer('*', fn ($view) => $view->with('masjidSemasa', Masjid::semasa()));
+
+        /*
+         | Senarai masjid yang boleh dicapai pengguna log masuk — untuk penukar
+         | masjid di bar atas (hanya dipaparkan bila > 1 masjid). Query hanya
+         | dilakukan untuk pengguna multi-masjid (admin/pemerhati ditugaskan).
+         */
+        View::composer('layouts.app', function ($view) {
+            $user = auth()->user();
+            $senarai = collect();
+            if ($user) {
+                $ids = $user->accessibleMasjidIds();
+                if (count($ids) > 1) {
+                    $senarai = Masjid::whereIn('id', $ids)->orderBy('nama')->get(['id', 'nama']);
+                }
+            }
+            $view->with('masjidSenarai', $senarai);
+        });
     }
 }

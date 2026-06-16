@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Support\MasjidRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Asas semua FormRequest web — mesej validasi Bahasa Melayu seragam.
@@ -13,6 +15,15 @@ abstract class BaseFormRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * Peraturan `exists` diskop kepada masjid semasa (gula untuk MasjidRule::exists).
+     * Cth: $this->existsMasjid('coa'), atau $this->existsMasjid('coa')->where('is_header', 0).
+     */
+    protected function existsMasjid(string $table, string $column = 'id'): Exists
+    {
+        return MasjidRule::exists($table, $column);
     }
 
     public function messages(): array

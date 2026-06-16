@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Auth;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\AppUser;
 use App\Models\LoginAttempt;
@@ -60,7 +61,10 @@ class LoginController extends Controller
         $request->session()->regenerate();
         $user->update(['last_login_at' => now()]);
 
-        return redirect()->intended(route('dashboard'));
+        // Pemerhati = penyata sahaja → mendarat terus di Penyata Bulanan (elak lantunan ke dashboard).
+        $landing = $user->role === UserRole::VIEWER ? route('penyata.bulanan') : route('dashboard');
+
+        return redirect()->intended($landing);
     }
 
     public function logout(Request $request): RedirectResponse

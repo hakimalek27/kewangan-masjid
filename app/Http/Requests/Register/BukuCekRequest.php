@@ -10,7 +10,7 @@ class BukuCekRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'bank_account_id' => ['required', 'integer', 'exists:bank_account,id'],
+            'bank_account_id' => ['required', 'integer', $this->existsMasjid('bank_account')],
             'tarikh_keluar'   => ['required', 'date'],
             'penerima'        => ['required', 'string', 'max:200'],
             'no_siri_mula'    => ['required', 'string', 'max:30'],

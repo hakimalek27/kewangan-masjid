@@ -10,7 +10,7 @@ class AsetOpeningRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'coa_id'            => ['required', 'integer', 'exists:coa,id'],
+            'coa_id'            => ['required', 'integer', $this->existsMasjid('coa')],
             'kod_aset'          => ['nullable', 'string', 'max:40'],
             'nama'              => ['required', 'string', 'max:200'],
             'tarikh_perolehan'  => ['required', 'date'],

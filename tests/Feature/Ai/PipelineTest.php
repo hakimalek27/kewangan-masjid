@@ -337,8 +337,8 @@ class PipelineTest extends TestCase
 
         $this->assertSame('PENDING_REVIEW', $draf->fresh()->status);
 
-        // viewer masih boleh LIHAT senarai draf
-        $this->actingAs($this->viewer)->get(route('draf.index'))->assertOk();
+        // viewer (Phase A) = penyata sahaja → senarai draf turut dialih ke penyata bulanan
+        $this->actingAs($this->viewer)->get(route('draf.index'))->assertRedirect(route('penyata.bulanan'));
     }
 
     // ---------- (h) Vault: kunci API tidak plaintext dalam jadual ----------

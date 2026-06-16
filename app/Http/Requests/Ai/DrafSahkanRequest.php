@@ -13,11 +13,11 @@ class DrafSahkanRequest extends BaseFormRequest
             'jenis' => ['required', 'in:KUTIPAN,BAYARAN'],
             'tarikh' => ['required', 'date'],
             'jumlah' => ['required', 'numeric', 'min:0.01'],
-            'coa_id' => ['required', 'integer', 'exists:coa,id'],
+            'coa_id' => ['required', 'integer', $this->existsMasjid('coa')],
             'penerima' => ['nullable', 'string', 'max:200'],
             'no_rujukan' => ['nullable', 'string', 'max:80'],
             'kaedah' => ['nullable', 'in:EFT,QR,CEK,TUNAI,BANK_TRANSFER_QR'],
-            'bank_account_id' => ['nullable', 'integer', 'exists:bank_account,id'],
+            'bank_account_id' => ['nullable', 'integer', $this->existsMasjid('bank_account')],
             'deskripsi' => ['nullable', 'string', 'max:500'],
         ];
     }

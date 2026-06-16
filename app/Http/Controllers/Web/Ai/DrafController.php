@@ -41,7 +41,7 @@ class DrafController extends Controller
     public function lihat(TxnDraft $draf): View
     {
         $extraction = $draf->extraction_id ? AiExtraction::find($draf->extraction_id) : null;
-        $inbox = $draf->inbox_id ? DocInbox::withoutMasjidScope()->find($draf->inbox_id) : null;
+        $inbox = $draf->inbox_id ? DocInbox::withoutMasjidScope()->where('masjid_id', app('current.masjid_id'))->find($draf->inbox_id) : null;
 
         return view('ai.draf-lihat', compact('draf', 'extraction', 'inbox'));
     }
@@ -49,7 +49,7 @@ class DrafController extends Controller
     /** Stream imej resit dari storan private (auth sahaja). */
     public function imej(TxnDraft $draf): StreamedResponse
     {
-        $inbox = $draf->inbox_id ? DocInbox::withoutMasjidScope()->find($draf->inbox_id) : null;
+        $inbox = $draf->inbox_id ? DocInbox::withoutMasjidScope()->where('masjid_id', app('current.masjid_id'))->find($draf->inbox_id) : null;
         abort_unless($inbox && $inbox->file_path && Storage::disk('local')->exists($inbox->file_path), 404);
 
         return Storage::disk('local')->response(

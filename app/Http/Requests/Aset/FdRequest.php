@@ -12,8 +12,8 @@ class FdRequest extends BaseFormRequest
         return [
             'tarikh'          => ['required', 'date'],
             'institusi'       => ['required', 'string', 'max:200'],
-            'coa_fd_id'       => ['required', 'integer', 'exists:coa,id'],
-            'bank_account_id' => ['required', 'integer', 'exists:bank_account,id'],
+            'coa_fd_id'       => ['required', 'integer', $this->existsMasjid('coa')],
+            'bank_account_id' => ['required', 'integer', $this->existsMasjid('bank_account')],
             'jumlah'          => ['required', 'numeric', 'min:0.01'],
             'kadar_pct'       => ['nullable', 'numeric', 'min:0', 'max:100'],
             'tempoh_bulan'    => ['nullable', 'integer', 'min:1', 'max:600'],

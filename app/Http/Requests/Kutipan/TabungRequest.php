@@ -23,7 +23,7 @@ class TabungRequest extends BaseFormRequest
             'dibank_oleh'     => ['nullable', 'string', 'max:200'],
             'tar_kira'        => ['required', 'date'],
             'tar_bankin'      => ['nullable', 'date'],
-            'bank_account_id' => ['nullable', 'integer', 'exists:bank_account,id'],
+            'bank_account_id' => ['nullable', 'integer', $this->existsMasjid('bank_account')],
             'no_slip'         => ['nullable', 'string', 'max:60'],
             'nama_pemberi'    => ['nullable', 'string', 'max:200'],
             'auto_resit'      => ['nullable', 'boolean'],

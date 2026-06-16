@@ -9,7 +9,7 @@ use App\Models\Coa;
 use App\Models\Masjid;
 use App\Services\Laporan\ReportService;
 use App\Services\Laporan\StatementService;
-use App\Support\Setting;
+use App\Support\UserSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -232,19 +232,19 @@ class PenyataController extends Controller
 
     /**
      * Gaya paparan penyata: 'v1' (bersih, replika mesrasuci) atau 'semasa' (Bootstrap berbingkai).
-     * Jika ?gaya= dihantar → simpan pilihan (app_setting) supaya kekal; jika tidak → baca tetapan (lalai 'v1').
+     * PER-PENGGUNA (jadual user_setting): jika ?gaya= dihantar → simpan pilihan pengguna; jika tidak → baca (lalai 'v1').
      */
     private function gaya(Request $request): string
     {
-        $semasa = Setting::get('gaya_penyata', 'v1');
+        $semasa = UserSetting::get('gaya_penyata', 'v1');
         $g = $request->input('gaya');
         if (! in_array($g, ['v1', 'semasa'], true)) {
             return $semasa;
         }
-        // Simpan pilihan HANYA pada paparan skrin (bukan eksport PDF/XLS) dan HANYA jika berubah —
-        // elak tulis DB berulang pada GET & elak eksport mengubah tetapan paparan masjid.
+        // Pilihan PER-PENGGUNA: simpan HANYA pada paparan skrin (bukan eksport PDF/XLS) dan HANYA jika
+        // berubah — elak tulis DB berulang pada GET. Tidak menjejaskan pengguna lain.
         if ($g !== $semasa && ! $this->format($request)) {
-            Setting::set('gaya_penyata', $g);
+            UserSetting::set('gaya_penyata', $g);
         }
 
         return $g;
@@ -264,8 +264,7 @@ class PenyataController extends Controller
 
     private function namaMasjid(): string
     {
-        return auth()->user()?->masjid?->nama
-            ?? Masjid::find(config('sppkms.masjid_id'))?->nama
-            ?? config('app.name');
+        // Masjid AKTIF (ikut pilihan switcher), bukan masjid asal pengguna.
+        return Masjid::semasa()?->nama ?? config('app.name');
     }
 }
