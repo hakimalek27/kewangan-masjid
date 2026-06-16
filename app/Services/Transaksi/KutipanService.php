@@ -179,7 +179,11 @@ class KutipanService
             return $this->journal->coaByKod(config('sppkms.coa.tunai_di_tangan'))->id;
         }
 
-        $bank = \App\Models\BankAccount::withoutMasjidScope()->findOrFail($data['bank_account_id'] ?? 0);
+        // Skop-diri kepada masjid semasa (jangan bergantung kpd skop global sahaja).
+        $masjidId = app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('sppkms.masjid_id');
+        $bank = \App\Models\BankAccount::withoutMasjidScope()
+            ->where('masjid_id', $masjidId)
+            ->findOrFail($data['bank_account_id'] ?? 0);
 
         return (int) $bank->coa_id;
     }

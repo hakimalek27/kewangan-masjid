@@ -85,6 +85,23 @@ class MasjidOnboardingTest extends TestCase
         $this->assertNull(Masjid::where('nama', 'Masjid Haram')->first());
     }
 
+    public function test_onboard_gagal_dan_gulung_balik_jika_templat_coa_kosong(): void
+    {
+        // Templat COA tunjuk ke masjid TANPA COA → semaian 0 → SELURUH transaksi gulung balik.
+        $kosong = (int) Masjid::create(['nama' => 'Templat Kosong '.uniqid()])->id;
+        config(['sppkms.masjid_id' => $kosong]);
+
+        $login = 'bdh_'.uniqid();
+        $this->actingAs($this->admin)->post(route('tetapan.masjid.baru.simpan'), [
+            'nama' => 'Masjid Tanpa COA', 'kategori' => 'MASJID KARIAH', 'negeri' => 'Selangor',
+            'login' => $login, 'nama_penuh' => 'Bendahari X', 'kata_laluan' => 'rahsia123',
+        ])->assertSessionHasErrors('nama');
+
+        // Tiada masjid yatim & tiada login yatim dicipta (atomik)
+        $this->assertNull(Masjid::where('nama', 'Masjid Tanpa COA')->first());
+        $this->assertNull(AppUser::where('login', $login)->first());
+    }
+
     public function test_login_duplikat_ditolak_tanpa_cipta_masjid(): void
     {
         $this->actingAs($this->admin)->post(route('tetapan.masjid.baru.simpan'), [

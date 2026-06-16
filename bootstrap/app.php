@@ -35,6 +35,20 @@ return Application::configure(basePath: dirname(__DIR__))
         // Fasa 9 — UX: bahasa antaramuka (BM|EN) daripada sesi
         $middleware->web(append: [\App\Http\Middleware\SetLocale::class]);
 
+        /*
+         | KESELAMATAN MULTI-PENYEWA: konteks masjid MESTI diikat SEBELUM
+         | route-model binding (SubstituteBindings). Jika tidak, ikatan
+         | {kutipan}/{pembayaran}/{fd}/dll berjalan TANPA skop masjid lagi
+         | (current.masjid_id belum wujud) → skop global tidak menapis →
+         | mana-mana pengguna boleh buka rekod masjid LAIN melalui id
+         | (kebocoran IDOR merentas penyewa). Letak SetMasjidContext betul
+         | selepas Authenticate + StartSession, betul sebelum binding.
+         */
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\SetMasjidContext::class,
+        );
+
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo(fn () => route('dashboard'));
     })

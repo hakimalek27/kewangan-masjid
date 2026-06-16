@@ -117,7 +117,9 @@ class PembayaranService
     public function createRekupmen(array $data): Pembayaran
     {
         return DB::transaction(function () use ($data) {
-            $bank = BankAccount::withoutMasjidScope()->findOrFail($data['bank_account_id']);
+            $bank = BankAccount::withoutMasjidScope()
+                ->where('masjid_id', app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('sppkms.masjid_id'))
+                ->findOrFail($data['bank_account_id']);
 
             $baucerNo = !empty($data['auto_baucer'])
                 ? $this->seq->next(SequenceType::PWR)
@@ -209,7 +211,9 @@ class PembayaranService
             return [$pwrCoaId, $pwrCoaId, null];
         }
 
-        $bank = BankAccount::withoutMasjidScope()->findOrFail($data['bank_account_id'] ?? 0);
+        $bank = BankAccount::withoutMasjidScope()
+            ->where('masjid_id', app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('sppkms.masjid_id'))
+            ->findOrFail($data['bank_account_id'] ?? 0);
 
         return [(int) $bank->coa_id, null, (int) $bank->id];
     }

@@ -62,7 +62,9 @@ class AsetService
     /** SNT (kontra) bagi COA aset: 200-01030 → 200-01035 (corak digit akhir +5). */
     private function sntUntukCoa(int $coaId): ?int
     {
-        $coa = Coa::withoutMasjidScope()->find($coaId);
+        // Skop-diri kepada masjid semasa supaya coaId asing tidak boleh derive SNT silang-masjid.
+        $masjidId = app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('sppkms.masjid_id');
+        $coa = Coa::withoutMasjidScope()->where('masjid_id', $masjidId)->find($coaId);
         if (!$coa) {
             return null;
         }

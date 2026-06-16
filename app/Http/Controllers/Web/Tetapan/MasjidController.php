@@ -41,46 +41,65 @@ class MasjidController extends Controller
     }
 
     /**
-     * Phase B — cipta masjid baharu + login bendahari pertama dalam SATU transaksi.
-     * Tiada penyemaian COA/bank/baki awal — bendahari baharu sediakan sendiri via Wizard.
+     * Phase B — cipta masjid baharu + login bendahari pertama + semai Carta Akaun
+     * standard (definisi sahaja, dari masjid templat) dalam SATU transaksi atomik.
+     * Jika templat COA kosong/salah konfigurasi → SELURUH transaksi digulung balik
+     * (tiada masjid yatim tanpa COA). Bendahari sediakan bank/baki awal sendiri
+     * kemudian melalui Wizard Setup.
      */
     public function ciptaMasjid(MasjidBaruRequest $request): RedirectResponse
     {
         $data = $request->validated();
 
-        $hasil = DB::transaction(function () use ($data) {
-            $masjid = Masjid::create([
-                'nama'     => $data['nama'],
-                'kategori' => $data['kategori'] ?? null,
-                'alamat'   => $data['alamat'] ?? null,
-                'poskod'   => $data['poskod'] ?? null,
-                'bandar'   => $data['bandar'] ?? null,
-                'daerah'   => $data['daerah'] ?? null,
-                'negeri'   => $data['negeri'] ?? null,
-                'telefon'  => $data['telefon'] ?? null,
-                'emel'     => $data['emel'] ?? null,
-            ]);
+        try {
+            $hasil = DB::transaction(function () use ($data) {
+                $masjid = Masjid::create([
+                    'nama'     => $data['nama'],
+                    'kategori' => $data['kategori'] ?? null,
+                    'alamat'   => $data['alamat'] ?? null,
+                    'poskod'   => $data['poskod'] ?? null,
+                    'bandar'   => $data['bandar'] ?? null,
+                    'daerah'   => $data['daerah'] ?? null,
+                    'negeri'   => $data['negeri'] ?? null,
+                    'telefon'  => $data['telefon'] ?? null,
+                    'emel'     => $data['emel'] ?? null,
+                ]);
 
-            $user = AppUser::create([
-                'masjid_id'     => $masjid->id,
-                'login'         => $data['login'],
-                'nama_penuh'    => $data['nama_penuh'],
-                'role'          => UserRole::BENDAHARI->value,
-                'password_hash' => Hash::make($data['kata_laluan']),
-                'is_active'     => 1,
-            ]);
+                $user = AppUser::create([
+                    'masjid_id'     => $masjid->id,
+                    'login'         => $data['login'],
+                    'nama_penuh'    => $data['nama_penuh'],
+                    'role'          => UserRole::BENDAHARI->value,
+                    'password_hash' => Hash::make($data['kata_laluan']),
+                    'is_active'     => 1,
+                ]);
 
-            // Semai Carta Akaun standard supaya masjid baharu terus boleh berfungsi.
-            $bilCoa = $this->coaTemplat->sediaUntukMasjid($masjid->id);
+                // Semai Carta Akaun standard supaya masjid baharu terus boleh berfungsi.
+                $bilCoa = $this->coaTemplat->sediaUntukMasjid($masjid->id);
 
-            // Jejak audit di bawah masjid BAHARU (rekod permulaan jejaknya).
-            $this->audit->log('CREATE', 'masjid', null, ['nama' => $masjid->nama], $masjid->id, null, $masjid->id);
-            $this->audit->log('CREATE', 'app_user', null,
-                ['login' => $user->login, 'role' => 'bendahari'], $user->id, null, $masjid->id);
-            $this->audit->log('CREATE', 'coa', null, ['disemai' => $bilCoa, 'templat' => (int) config('sppkms.masjid_id')], null, null, $masjid->id);
+                // Templat COA kosong/salah → masjid TAK boleh rekod transaksi.
+                // Lemparkan supaya transaksi gulung balik (jangan commit masjid yatim).
+                if ($bilCoa < 1) {
+                    throw new \RuntimeException(
+                        'Templat COA kosong atau tidak dijumpai (SPPKMS_MASJID_ID='.
+                        (int) config('sppkms.masjid_id').'). Masjid tidak dicipta.'
+                    );
+                }
 
-            return ['masjid' => $masjid, 'user' => $user, 'coa' => $bilCoa];
-        });
+                // Jejak audit di bawah masjid BAHARU (rekod permulaan jejaknya).
+                $this->audit->log('CREATE', 'masjid', null, ['nama' => $masjid->nama], $masjid->id, null, $masjid->id);
+                $this->audit->log('CREATE', 'app_user', null,
+                    ['login' => $user->login, 'role' => 'bendahari'], $user->id, null, $masjid->id);
+                $this->audit->log('CREATE', 'coa', null, ['disemai' => $bilCoa, 'templat' => (int) config('sppkms.masjid_id')], null, null, $masjid->id);
+
+                return ['masjid' => $masjid, 'user' => $user, 'coa' => $bilCoa];
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->withErrors(['nama' => $e->getMessage()]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Perlumbaan login duplikat yang lolos pra-semak unik → mesej mesra (masjid digulung balik).
+            return back()->withInput()->withErrors(['login' => 'Nama log masuk ini telah digunakan.']);
+        }
 
         return redirect()->route('tetapan.pengguna')->with('success',
             "Masjid '".$hasil['masjid']->nama."' dicipta — bendahari '".$hasil['user']->login."' + ".
@@ -99,7 +118,14 @@ class MasjidController extends Controller
             return back()->with('success', "Berjaya semai {$bil} akaun COA standard untuk masjid ini.");
         }
 
-        return back()->with('success', 'COA sudah wujud untuk masjid ini — tiada perubahan.');
+        // $bil === 0: bezakan 'sudah ada COA' (Coa::count diskop masjid semasa) vs 'templat kosong/salah'.
+        if (Coa::count() > 0) {
+            return back()->with('success', 'COA sudah wujud untuk masjid ini — tiada perubahan.');
+        }
+
+        return back()->with('error',
+            'Templat COA kosong atau tidak dijumpai (SPPKMS_MASJID_ID='.
+            (int) config('sppkms.masjid_id').'). Tiada akaun disemai — sila semak konfigurasi.');
     }
 
     public function kemaskini(MasjidRequest $request): RedirectResponse

@@ -23,6 +23,19 @@ class RekonsiliasiController extends Controller
     {
     }
 
+    /**
+     * Pastikan baris penyata milik bank masjid SEMASA. Jadual bank_statement_line
+     * TIADA lajur masjid_id — pemilikan hanya melalui bank_account_id. BankAccount
+     * diskop global kepada masjid semasa, jadi whereKey() hanya wujud jika bank itu
+     * milik masjid semasa; jika tidak → 404 (sama seperti ikatan model lain yang
+     * tertapis merentas masjid). Tanpa ini, {line} terikat tanpa skop → pengguna
+     * masjid lain boleh ubah status rekonsiliasi masjid ini (tulis silang-penyewa).
+     */
+    private function pastikanBarisMilikMasjid(BankStatementLine $line): void
+    {
+        abort_unless(BankAccount::whereKey($line->bank_account_id)->exists(), 404);
+    }
+
     public function index(Request $request): View
     {
         $banks = BankAccount::query()->where('status', 'AKTIF')->orderBy('slot')->get();
@@ -97,6 +110,8 @@ class RekonsiliasiController extends Controller
     /** Padanan manual baris penyata ↔ voucher. */
     public function padan(Request $request, BankStatementLine $line): RedirectResponse
     {
+        $this->pastikanBarisMilikMasjid($line);
+
         $data = $request->validate(['voucher_id' => ['required', 'integer']], [], ['voucher_id' => 'Voucher']);
 
         try {
@@ -112,6 +127,8 @@ class RekonsiliasiController extends Controller
     /** Abaikan baris penyata (bukan transaksi buku, cth caj bank lama). */
     public function abaikan(BankStatementLine $line): RedirectResponse
     {
+        $this->pastikanBarisMilikMasjid($line);
+
         $this->servis->setStatus($line, 'IGNORED');
 
         return redirect()->route('rekonsiliasi.index', ['bank_account_id' => $line->bank_account_id])
