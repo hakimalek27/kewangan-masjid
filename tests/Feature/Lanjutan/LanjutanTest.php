@@ -11,6 +11,7 @@ use App\Models\DepreciationSchedule;
 use App\Models\FixedAsset;
 use App\Models\JournalVoucher;
 use App\Models\Pembayaran;
+use App\Services\Lanjutan\ApprovalService;
 use App\Services\Lanjutan\DepreciationService;
 use App\Services\Lanjutan\YearEndService;
 use App\Services\Laporan\ReportService;
@@ -320,6 +321,99 @@ class LanjutanTest extends TestCase
 
         Storage::disk('local')->assertMissing($stash);
         $this->assertTrue(Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN LAMPIRAN TOLAK')->doesntExist());
+    }
+
+    /* -------- (e3) Maker-Checker — suis induk ON/OFF + cegah double-approve -------- */
+
+    public function test_maker_checker_suis_mati_terus_rekod(): void
+    {
+        Setting::set('approval_threshold', '100');
+        Setting::set('approval_enabled', 'off'); // suis induk MATI
+
+        // Bendahari RM500 > had TETAPI suis mati → terus jadi pembayaran (tiada approval).
+        $this->actingAs($this->bendahari)->post(route('belanja.simpan'), [
+            'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
+            'pemohon' => 'UJIAN SUIS MATI', 'coa_id' => $this->coaId('600-06000'),
+            'deskripsi' => 'UJIAN SUIS', 'jumlah' => '500', 'cara_bayar' => 'EFT',
+            'bank_account_id' => $this->bank->id, 'semakan' => '1',
+        ])->assertRedirect(route('belanja.senarai'));
+
+        $this->assertTrue(
+            Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN SUIS MATI')->exists(),
+            'Bila suis mati, bayaran terus direkod tanpa kelulusan',
+        );
+        $this->assertSame(0, Approval::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('status', 'PENDING')->where('amaun', '500.00')->count());
+    }
+
+    public function test_kawalan_toggle_kelulusan_disimpan(): void
+    {
+        // Suis bertanda → hantar '1' → 'on'
+        $this->actingAs($this->admin)->post(route('kawalan.simpan'), [
+            'approval_enabled' => '1', 'approval_threshold' => '100', 'baki_rendah_ambang' => '0',
+        ])->assertRedirect(route('kawalan.index'));
+        $this->assertSame('on', Setting::get(ApprovalService::KEY_ENABLED));
+
+        // Suis TAK bertanda → medan tersembunyi hantar '0' → 'off'
+        $this->actingAs($this->admin)->post(route('kawalan.simpan'), [
+            'approval_enabled' => '0', 'approval_threshold' => '100', 'baki_rendah_ambang' => '0',
+        ])->assertRedirect(route('kawalan.index'));
+        $this->assertSame('off', Setting::get(ApprovalService::KEY_ENABLED));
+    }
+
+    public function test_lulus_kedua_dihalang_kunci_tiada_bayar_dua_kali(): void
+    {
+        Setting::set('approval_threshold', '100');
+        $svc = app(ApprovalService::class);
+
+        $approval = $svc->mohon('BAYARAN', 500.0, [
+            'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
+            'pemohon' => 'UJIAN DOUBLE', 'coa_id' => $this->coaId('600-06000'),
+            'deskripsi' => 'UJIAN DOUBLE APPROVE', 'jumlah' => '500', 'cara_bayar' => 'EFT',
+            'bank_account_id' => $this->bank->id,
+        ]);
+
+        $p1 = $svc->lulus($approval);
+        $this->assertNotNull($p1);
+
+        // $approval masih 'PENDING' dlm memori (lulus mengemaskini salinan TERKUNCI, bukan
+        // instance ini) → semakan AWAL lepas, tetapi kunci+semak-semula dlm transaksi
+        // menangkap APPROVED. Mensimulasi dua pelulus serentak dgn instance basi.
+        try {
+            $svc->lulus($approval);
+            $this->fail('Lulus kedua sepatutnya gagal (sudah diputuskan)');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('diputuskan', $e->getMessage());
+        }
+
+        $this->assertSame(1, Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN DOUBLE')->count(),
+            'Hanya SATU pembayaran — tiada bayar dua kali');
+    }
+
+    public function test_sapu_lampiran_yatim_kekalkan_yang_dirujuk(): void
+    {
+        Storage::fake('local');
+        $disk = Storage::disk('local');
+
+        $disk->put('lampiran/yatim.pdf', 'X');   // (a) tiada rujukan → buang
+        $disk->put('lampiran/dipakai.pdf', 'Y'); // (b) dirujuk Attachment → kekal
+        $disk->put('lampiran/pending.pdf', 'Z'); // (c) dlm permohonan PENDING → kekal
+
+        Attachment::create([
+            'owner_type' => 'BAYARAN', 'owner_id' => 1,
+            'file_path' => 'lampiran/dipakai.pdf', 'file_name' => 'dipakai.pdf',
+        ]);
+        Approval::withoutMasjidScope()->create([
+            'masjid_id' => config('sppkms.masjid_id'), 'entity' => 'BAYARAN', 'entity_id' => null,
+            'amaun' => '10.00', 'status' => 'PENDING', 'remark' => 'UJIAN SAPU',
+            'payload' => json_encode(['_jenis' => 'BAYARAN', '_lampiran' => [['file_path' => 'lampiran/pending.pdf']]]),
+        ]);
+
+        $this->artisan('sppkms:sapu-lampiran', ['--hari' => 0])->assertSuccessful();
+
+        $disk->assertMissing('lampiran/yatim.pdf');  // yatim dibuang
+        $disk->assertExists('lampiran/dipakai.pdf'); // dirujuk Attachment dikekalkan
+        $disk->assertExists('lampiran/pending.pdf'); // permohonan PENDING dikekalkan
     }
 
     /* ---------------- (f) Rekonsiliasi — import CSV, 1 padan auto 1 tidak ---------------- */

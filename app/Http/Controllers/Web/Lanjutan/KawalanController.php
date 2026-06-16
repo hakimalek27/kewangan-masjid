@@ -29,6 +29,7 @@ class KawalanController extends Controller
     public function index(): View
     {
         return view('lanjutan.kawalan', [
+            'approvalEnabled'   => Setting::get(ApprovalService::KEY_ENABLED, 'on'),
             'threshold'         => Setting::get(ApprovalService::KEY_THRESHOLD, '0'),
             'fundDeficitAlert'  => Setting::get('fund_deficit_alert', 'on'),
             'budgetWarning'     => Setting::get('budget_warning', 'on'),
@@ -39,6 +40,7 @@ class KawalanController extends Controller
     public function simpan(Request $request): RedirectResponse
     {
         $data = $request->validate([
+            'approval_enabled'   => ['nullable', 'boolean'],
             'approval_threshold' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'fund_deficit_alert' => ['nullable', 'boolean'],
             'budget_warning'     => ['nullable', 'boolean'],
@@ -49,6 +51,7 @@ class KawalanController extends Controller
         ]);
 
         $sebelum = [
+            'approval_enabled'   => Setting::get(ApprovalService::KEY_ENABLED, 'on'),
             'approval_threshold' => Setting::get(ApprovalService::KEY_THRESHOLD, '0'),
             'fund_deficit_alert' => Setting::get('fund_deficit_alert', 'on'),
             'budget_warning'     => Setting::get('budget_warning', 'on'),
@@ -56,6 +59,7 @@ class KawalanController extends Controller
         ];
 
         $selepas = [
+            'approval_enabled'   => empty($data['approval_enabled']) ? 'off' : 'on',
             'approval_threshold' => number_format((float) $data['approval_threshold'], 2, '.', ''),
             'fund_deficit_alert' => empty($data['fund_deficit_alert']) ? 'off' : 'on',
             'budget_warning'     => empty($data['budget_warning']) ? 'off' : 'on',
@@ -63,12 +67,14 @@ class KawalanController extends Controller
         ];
 
         foreach ($selepas as $k => $v) {
-            Setting::set($k === 'approval_threshold' ? ApprovalService::KEY_THRESHOLD : $k, $v);
+            Setting::set($k === 'approval_threshold' ? ApprovalService::KEY_THRESHOLD
+                : ($k === 'approval_enabled' ? ApprovalService::KEY_ENABLED : $k), $v);
         }
 
         $this->audit->log('UPDATE', 'app_setting', $sebelum, $selepas);
         $this->security->log('CONFIG_CHANGE',
-            'Kawalan dalaman dikemaskini: had kelulusan RM'.$selepas['approval_threshold'], 'MEDIUM');
+            'Kawalan dalaman dikemaskini: kelulusan '.$selepas['approval_enabled'].
+            ', had kelulusan RM'.$selepas['approval_threshold'], 'MEDIUM');
 
         return redirect()->route('kawalan.index')->with('success', 'Tetapan kawalan dalaman disimpan.');
     }

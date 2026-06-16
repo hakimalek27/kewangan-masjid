@@ -16,15 +16,19 @@ use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 /**
- * Maker-Checker (Fasa 9) — Setting 'approval_threshold' (RM, 0 = mati).
- * Bendahari yang membuat bayaran > had → payload borang disimpan dalam
+ * Maker-Checker (Fasa 9) — suis induk Setting 'approval_enabled' (on/off, lalai on)
+ * + had Setting 'approval_threshold' (RM, 0 = mati melalui had).
+ * Bila aktif: bendahari yang membuat bayaran > had → payload borang disimpan dalam
  * jadual approval (PENDING, entity_id NULL); TIADA pembayaran/jurnal dicipta.
- * Admin/Pengerusi meluluskan → payload dimainkan semula melalui
- * PembayaranService (satu-satunya laluan ke jurnal) atau menolak.
+ * Admin/Pengerusi meluluskan → payload dimainkan semula melalui PembayaranService
+ * (satu-satunya laluan ke jurnal) atau menolak. Lulus/tolak dikunci (lockForUpdate)
+ * supaya tiada keputusan serentak (cegah double-approve → bayar dua kali).
  */
 class ApprovalService
 {
     public const KEY_THRESHOLD = 'approval_threshold';
+
+    public const KEY_ENABLED = 'approval_enabled';
 
     public function __construct(
         private PembayaranService $pembayaran,
@@ -33,15 +37,29 @@ class ApprovalService
     ) {
     }
 
-    /** Had kelulusan semasa (RM). 0 = maker-checker dimatikan. */
+    /** Had kelulusan semasa (RM). 0 = maker-checker dimatikan (melalui had). */
     public function had(?int $masjidId = null): float
     {
         return round((float) Setting::get(self::KEY_THRESHOLD, '0', $masjidId), 2);
     }
 
-    /** Adakah permohonan ini perlu kelulusan? (bendahari + jumlah > had; admin lepas terus) */
+    /**
+     * Suis induk maker-checker (ON/OFF). Lalai ON supaya tingkah laku sedia ada
+     * (berdasarkan had) kekal bagi deployment lama; admin boleh matikan terus di
+     * /tetapan/kawalan. OFF → tiada bayaran perlu kelulusan walau melebihi had.
+     */
+    public function aktif(?int $masjidId = null): bool
+    {
+        return in_array(Setting::get(self::KEY_ENABLED, 'on', $masjidId), ['on', '1', 'true'], true);
+    }
+
+    /** Adakah permohonan ini perlu kelulusan? (suis ON + bendahari + jumlah > had; admin lepas terus) */
     public function perluKelulusan(float $jumlah, ?AppUser $pengguna): bool
     {
+        if (! $this->aktif()) {
+            return false;
+        }
+
         $had = $this->had();
 
         return $had > 0
@@ -102,6 +120,14 @@ class ApprovalService
         unset($payload['_lampiran']);
 
         return DB::transaction(function () use ($approval, $payload, $jenis, $checkerId, $lampiran) {
+            // Kunci baris + semak status SEMULA secara atomik — cegah lulus serentak
+            // (double-approve → bayar dua kali). Transaksi kedua menunggu kunci, melihat
+            // status sudah APPROVED, lalu gagal di sini sebelum mencipta pembayaran kedua.
+            $semasa = Approval::withoutMasjidScope()->whereKey($approval->id)->lockForUpdate()->first();
+            if (! $semasa || $semasa->status !== 'PENDING') {
+                throw new InvalidArgumentException("Permohonan #{$approval->id} telah pun diputuskan.");
+            }
+
             $pembayaran = $jenis === 'REKUPMEN'
                 ? $this->pembayaran->createRekupmen($payload)
                 : $this->pembayaran->createBayaran($payload);
@@ -124,7 +150,7 @@ class ApprovalService
                 ]);
             }
 
-            $approval->update([
+            $semasa->update([
                 'status'     => 'APPROVED',
                 'entity_id'  => $pembayaran->id,
                 'checker_id' => $checkerId ?? (app()->bound('current.user_id') ? app('current.user_id') : null),
@@ -133,7 +159,7 @@ class ApprovalService
 
             $this->audit->log('APPROVE', 'approval', ['status' => 'PENDING'], [
                 'status' => 'APPROVED', 'pembayaran_id' => $pembayaran->id, 'jenis' => $jenis, 'lampiran' => count($lampiran),
-            ], $approval->id);
+            ], $semasa->id);
 
             return $pembayaran;
         });
@@ -146,25 +172,33 @@ class ApprovalService
             throw new InvalidArgumentException("Permohonan #{$approval->id} telah pun diputuskan ({$approval->status}).");
         }
 
-        // Permohonan ditolak → tiada pembayaran; buang fail dokumen yg distash (jangan
-        // tinggalkan PII yatim di storan). Tiada row attachment lagi (dicipta masa lulus).
-        $payload = json_decode((string) $approval->payload, true);
-        foreach ((is_array($payload) ? ($payload['_lampiran'] ?? []) : []) as $l) {
-            if (!empty($l['file_path'])) {
-                Storage::disk('local')->delete($l['file_path']);
+        return DB::transaction(function () use ($approval, $sebab, $checkerId) {
+            // Kunci baris + semak status SEMULA (selari lulus — cegah keputusan serentak).
+            $semasa = Approval::withoutMasjidScope()->whereKey($approval->id)->lockForUpdate()->first();
+            if (! $semasa || $semasa->status !== 'PENDING') {
+                throw new InvalidArgumentException("Permohonan #{$approval->id} telah pun diputuskan.");
             }
-        }
 
-        $approval->update([
-            'status'     => 'REJECTED',
-            'checker_id' => $checkerId ?? (app()->bound('current.user_id') ? app('current.user_id') : null),
-            'decided_at' => now(),
-            'remark'     => mb_substr(trim(($approval->remark ?? '').' | DITOLAK: '.$sebab, ' |'), 0, 300),
-        ]);
+            // Permohonan ditolak → tiada pembayaran; buang fail dokumen yg distash (jangan
+            // tinggalkan PII yatim di storan). Tiada row attachment lagi (dicipta masa lulus).
+            $payload = json_decode((string) $semasa->payload, true);
+            foreach ((is_array($payload) ? ($payload['_lampiran'] ?? []) : []) as $l) {
+                if (! empty($l['file_path'])) {
+                    Storage::disk('local')->delete($l['file_path']);
+                }
+            }
 
-        $this->audit->log('UPDATE', 'approval', ['status' => 'PENDING'],
-            ['status' => 'REJECTED', 'sebab' => mb_substr($sebab, 0, 200)], $approval->id);
+            $semasa->update([
+                'status'     => 'REJECTED',
+                'checker_id' => $checkerId ?? (app()->bound('current.user_id') ? app('current.user_id') : null),
+                'decided_at' => now(),
+                'remark'     => mb_substr(trim(($semasa->remark ?? '').' | DITOLAK: '.$sebab, ' |'), 0, 300),
+            ]);
 
-        return $approval->fresh();
+            $this->audit->log('UPDATE', 'approval', ['status' => 'PENDING'],
+                ['status' => 'REJECTED', 'sebab' => mb_substr($sebab, 0, 200)], $semasa->id);
+
+            return $semasa->fresh();
+        });
     }
 }

@@ -10,6 +10,19 @@
             <div class="card-body">
                 <form method="POST" action="{{ route('kawalan.simpan') }}">
                     @csrf
+                    <div class="form-check form-switch mb-3 border-bottom pb-3">
+                        <input type="hidden" name="approval_enabled" value="0">
+                        <input class="form-check-input" type="checkbox" name="approval_enabled" id="approval_enabled"
+                               value="1" @checked((bool) old('approval_enabled', $approvalEnabled !== 'off'))>
+                        <label class="form-check-label fw-semibold" for="approval_enabled">
+                            {{ __('Hidupkan Kelulusan Pembayaran (Maker-Checker)') }}
+                        </label>
+                        <div class="form-text">
+                            <strong>{{ __('Suis induk.') }}</strong>
+                            {{ __('Jika dimatikan, semua bayaran terus direkod tanpa kelulusan — had di bawah diabaikan.') }}
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label" for="approval_threshold">
                             {{ __('Had Kelulusan Maker-Checker (RM)') }} <span class="text-danger">*</span>
@@ -24,16 +37,18 @@
                     </div>
 
                     <div class="form-check form-switch mb-2">
+                        <input type="hidden" name="fund_deficit_alert" value="0">
                         <input class="form-check-input" type="checkbox" name="fund_deficit_alert" id="fund_deficit_alert"
-                               value="1" @checked(old('fund_deficit_alert', $fundDeficitAlert) !== 'off')>
+                               value="1" @checked((bool) old('fund_deficit_alert', $fundDeficitAlert !== 'off'))>
                         <label class="form-check-label" for="fund_deficit_alert">
                             {{ __('Amaran defisit dana/tabung harian (SecurityEvent HIGH + Telegram, sekali sehari)') }}
                         </label>
                     </div>
 
                     <div class="form-check form-switch mb-3">
+                        <input type="hidden" name="budget_warning" value="0">
                         <input class="form-check-input" type="checkbox" name="budget_warning" id="budget_warning"
-                               value="1" @checked(old('budget_warning', $budgetWarning) !== 'off')>
+                               value="1" @checked((bool) old('budget_warning', $budgetWarning !== 'off'))>
                         <label class="form-check-label" for="budget_warning">
                             {{ __('Amaran belanjawan pada borang Perbelanjaan (semakan peruntukan masa nyata)') }}
                         </label>
