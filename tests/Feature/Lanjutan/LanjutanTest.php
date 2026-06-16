@@ -204,6 +204,7 @@ class LanjutanTest extends TestCase
     public function test_maker_checker_aliran_penuh(): void
     {
         Setting::set('approval_threshold', '100');
+        Setting::set('approval_enabled', 'on'); // suis induk kini lalai OFF — hidupkan untuk uji aliran
 
         $borang = fn (string $jumlah, string $pemohon) => [
             'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12',
@@ -260,6 +261,7 @@ class LanjutanTest extends TestCase
     {
         Storage::fake('local');
         Setting::set('approval_threshold', '100');
+        Setting::set('approval_enabled', 'on');
 
         // Bendahari, RM250 > had + 1 dokumen → approval PENDING, fail DISTASH,
         // belum ada pembayaran/attachment BAYARAN.
@@ -300,6 +302,7 @@ class LanjutanTest extends TestCase
     {
         Storage::fake('local');
         Setting::set('approval_threshold', '100');
+        Setting::set('approval_enabled', 'on');
 
         $this->actingAs($this->bendahari)->post(route('belanja.simpan'), [
             'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
@@ -364,6 +367,7 @@ class LanjutanTest extends TestCase
     public function test_lulus_kedua_dihalang_kunci_tiada_bayar_dua_kali(): void
     {
         Setting::set('approval_threshold', '100');
+        Setting::set('approval_enabled', 'on');
         $svc = app(ApprovalService::class);
 
         $approval = $svc->mohon('BAYARAN', 500.0, [

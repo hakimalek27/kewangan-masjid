@@ -29,7 +29,7 @@ class KawalanController extends Controller
     public function index(): View
     {
         return view('lanjutan.kawalan', [
-            'approvalEnabled'   => Setting::get(ApprovalService::KEY_ENABLED, 'on'),
+            'approvalEnabled'   => Setting::get(ApprovalService::KEY_ENABLED, 'off'),
             'threshold'         => Setting::get(ApprovalService::KEY_THRESHOLD, '0'),
             'fundDeficitAlert'  => Setting::get('fund_deficit_alert', 'on'),
             'budgetWarning'     => Setting::get('budget_warning', 'on'),
@@ -51,7 +51,7 @@ class KawalanController extends Controller
         ]);
 
         $sebelum = [
-            'approval_enabled'   => Setting::get(ApprovalService::KEY_ENABLED, 'on'),
+            'approval_enabled'   => Setting::get(ApprovalService::KEY_ENABLED, 'off'),
             'approval_threshold' => Setting::get(ApprovalService::KEY_THRESHOLD, '0'),
             'fund_deficit_alert' => Setting::get('fund_deficit_alert', 'on'),
             'budget_warning'     => Setting::get('budget_warning', 'on'),

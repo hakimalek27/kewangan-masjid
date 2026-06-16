@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 /**
- * Maker-Checker (Fasa 9) — suis induk Setting 'approval_enabled' (on/off, lalai on)
+ * Maker-Checker (Fasa 9) — suis induk Setting 'approval_enabled' (on/off, lalai OFF)
  * + had Setting 'approval_threshold' (RM, 0 = mati melalui had).
  * Bila aktif: bendahari yang membuat bayaran > had → payload borang disimpan dalam
  * jadual approval (PENDING, entity_id NULL); TIADA pembayaran/jurnal dicipta.
@@ -44,13 +44,13 @@ class ApprovalService
     }
 
     /**
-     * Suis induk maker-checker (ON/OFF). Lalai ON supaya tingkah laku sedia ada
-     * (berdasarkan had) kekal bagi deployment lama; admin boleh matikan terus di
-     * /tetapan/kawalan. OFF → tiada bayaran perlu kelulusan walau melebihi had.
+     * Suis induk maker-checker (ON/OFF). LALAI OFF — maker-checker dimatikan
+     * melainkan admin menghidupkannya di /tetapan/kawalan. OFF → tiada bayaran
+     * perlu kelulusan walau melebihi had.
      */
     public function aktif(?int $masjidId = null): bool
     {
-        return in_array(Setting::get(self::KEY_ENABLED, 'on', $masjidId), ['on', '1', 'true'], true);
+        return in_array(Setting::get(self::KEY_ENABLED, 'off', $masjidId), ['on', '1', 'true'], true);
     }
 
     /** Adakah permohonan ini perlu kelulusan? (suis ON + bendahari + jumlah > had; admin lepas terus) */
