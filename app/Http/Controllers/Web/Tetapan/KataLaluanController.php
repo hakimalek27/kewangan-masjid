@@ -32,7 +32,10 @@ class KataLaluanController extends Controller
             return back()->withErrors(['kata_semasa' => 'Kata laluan semasa tidak betul.']);
         }
 
-        $user->update(['password_hash' => Hash::make($request->input('kata_baharu'))]);
+        $user->update([
+            'password_hash' => Hash::make($request->input('kata_baharu')),
+            'must_change_password' => false,
+        ]);
 
         $this->audit->log('UPDATE', 'app_user', null, ['tindakan' => 'tukar_kata_laluan'], $user->id);
         $this->security->log('CONFIG_CHANGE', 'Kata laluan ditukar oleh: '.$user->login, 'MEDIUM', $user->id);

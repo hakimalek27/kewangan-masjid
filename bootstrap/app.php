@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'masjid'        => \App\Http\Middleware\SetMasjidContext::class,
             'role'          => \App\Http\Middleware\RoleMiddleware::class,
             'viewer.guard'  => \App\Http\Middleware\RestrictViewer::class,
+            'paksa.katalaluan' => \App\Http\Middleware\PaksaTukarKataLaluan::class,
             // API awam /v1 (Fasa 6)
             'api.auth'     => \App\Http\Middleware\Api\ApiClientAuth::class,
             'api.scope'    => \App\Http\Middleware\Api\ApiScope::class,

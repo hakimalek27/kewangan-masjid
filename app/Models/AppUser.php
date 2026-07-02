@@ -15,6 +15,7 @@ class AppUser extends Authenticatable
     protected $hidden = ['password_hash'];
     protected $casts = [
         'is_active' => 'boolean',
+        'must_change_password' => 'boolean',
         'last_login_at' => 'datetime',
         'role' => UserRole::class,
     ];

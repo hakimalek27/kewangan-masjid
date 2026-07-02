@@ -56,7 +56,7 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth')->name('logout');
 
 // ---------- Aplikasi (perlu log masuk) ----------
-Route::middleware(['auth', 'masjid', 'viewer.guard'])->group(function () {
+Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

@@ -28,8 +28,15 @@ class AuditTrailService
         $req = request();
 
         return DB::transaction(function () use ($action, $entity, $before, $after, $entityId, $userId, $masjidId, $req) {
-            $prev = AuditTrail::query()
-                ->when($masjidId, fn ($q) => $q->where('masjid_id', $masjidId))
+            /*
+             | PENTING: query prev_hash MESTI buang skop global BelongsToMasjid.
+             | Jika tidak, apabila $masjidId (sasaran) ≠ current.masjid_id (sesi),
+             | skop global menambah `WHERE masjid_id = <sesi>` DI SAMPING
+             | `where('masjid_id', <sasaran>)` → dua syarat bercanggah → 0 baris →
+             | prev_hash NULL → rantai audit PUTUS (cth onboarding masjid baharu).
+             */
+            $prev = AuditTrail::withoutMasjidScope()
+                ->where(fn ($q) => $masjidId !== null ? $q->where('masjid_id', $masjidId) : $q->whereNull('masjid_id'))
                 ->orderByDesc('id')
                 ->lockForUpdate()
                 ->value('row_hash');
