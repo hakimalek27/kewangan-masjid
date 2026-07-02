@@ -9,7 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Fasa 9 — Penutupan Tahun (/tetapan/tutup-tahun, admin sahaja).
+ * Fasa 9 — Penutupan Tahun (/tetapan/tutup-tahun, TULIS = bendahari & pentadbir masjid;
+ * lihat routes/web.php).
  * Pratonton P&L tahun + amaran Akaun Sementara 300-99990 + butang Tutup.
  */
 class TutupTahunController extends Controller

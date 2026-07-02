@@ -45,8 +45,8 @@ class ApprovalService
 
     /**
      * Suis induk maker-checker (ON/OFF). LALAI OFF — maker-checker dimatikan
-     * melainkan admin menghidupkannya di /tetapan/kawalan. OFF → tiada bayaran
-     * perlu kelulusan walau melebihi had.
+     * melainkan bendahari/pentadbir menghidupkannya di /tetapan/kawalan. OFF →
+     * tiada bayaran perlu kelulusan walau melebihi had.
      */
     public function aktif(?int $masjidId = null): bool
     {

@@ -12,7 +12,9 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Fasa 9 — Kawalan Dalaman (/tetapan/kawalan, admin sahaja):
+ * Fasa 9 — Kawalan Dalaman (/tetapan/kawalan, TULIS = bendahari & pentadbir masjid;
+ * lihat routes/web.php). Nota SoD: pemilik tetapan masjid mengawal suis maker-checker
+ * masjidnya sendiri — keputusan reka bentuk (deployment satu-masjid).
  *   - approval_threshold  : had RM maker-checker (0 = mati)
  *   - fund_deficit_alert  : amaran defisit dana harian (on/off)
  *   - budget_warning      : amaran belanjawan pada borang perbelanjaan (on/off)

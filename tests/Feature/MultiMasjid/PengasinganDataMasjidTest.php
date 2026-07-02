@@ -125,6 +125,30 @@ class PengasinganDataMasjidTest extends TestCase
         $this->actingAs($this->bendahariB)->get(route('kutipan.view', $kA->id))->assertNotFound();
     }
 
+    /**
+     * B5 — bendahari masjid A TIDAK boleh menugaskan pemerhati ke masjid B melalui
+     * masjid_ids (kebocoran baca silang-penyewa). Pivot mesti ditapis ke masjid pelaku.
+     */
+    public function test_bendahari_tak_boleh_tugas_pemerhati_ke_masjid_lain(): void
+    {
+        app()->instance('current.masjid_id', $this->home);
+
+        $this->actingAs($this->bendahariA)->post(route('tetapan.pengguna.simpan'), [
+            'login'      => 'pemerhati_'.uniqid(),
+            'nama_penuh' => 'Pemerhati Ujian',
+            'role'       => 'viewer',
+            'masjid_ids' => [$this->masjidB],   // cuba beri akses masjid B
+            'kata_laluan' => 'rahsia123',
+        ])->assertSessionHasNoErrors();
+
+        $viewer = AppUser::where('nama_penuh', 'Pemerhati Ujian')->latest('id')->firstOrFail();
+
+        // Pivot TIDAK mengandungi masjid B → tiada akses silang-penyewa.
+        $this->assertNotContains($this->masjidB, $viewer->accessibleMasjidIds(),
+            'Bendahari berjaya beri pemerhati akses masjid lain (kebocoran B5).');
+        $this->assertFalse($viewer->canAccessMasjid($this->masjidB));
+    }
+
     /* ------------------------------------------ (3) Penukar masjid (konteks) */
 
     public function test_admin_tukar_masjid_konteks_data_ikut(): void

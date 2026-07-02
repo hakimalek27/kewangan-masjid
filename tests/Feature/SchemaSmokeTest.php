@@ -28,10 +28,12 @@ class SchemaSmokeTest extends TestCase
         }
     }
 
-    public function test_coa_129_akaun(): void
+    public function test_coa_130_akaun(): void
     {
+        // 129 COA seed asal + 600-15030 LAIN-LAIN PENGURUSAN JENAZAH (dicipta semasa
+        // re-point entri warisan header-COA — audit C8) = 130.
         app()->instance('current.masjid_id', config('sppkms.masjid_id'));
-        $this->assertSame(129, Coa::count());
+        $this->assertSame(130, Coa::count());
     }
 
     public function test_data_sejarah_utuh(): void
