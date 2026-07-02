@@ -109,13 +109,23 @@ class SppkmsDualWriteService
             );
         }
 
-        $sync->update([
-            'sppkms_endpoint' => $endpoint,
-            'sppkms_recno'    => $recno, // boleh null (cth rekupmen — redirect tanpa recno)
-            'status'          => 'DONE',
-            'last_error'      => null,
-            'done_at'         => now(),
-        ]);
+        try {
+            $sync->update([
+                'sppkms_endpoint' => $endpoint,
+                'sppkms_recno'    => $recno, // boleh null (cth rekupmen — redirect tanpa recno)
+                'status'          => 'DONE',
+                'last_error'      => null,
+                'done_at'         => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // E7 — POST BERJAYA tetapi simpanan status DONE tempatan gagal (DB blip).
+            // Retry buta akan RE-POST → PENDUA. Layan sebagai "sudah dihantar":
+            // FAILED + amaran semak-manual, TIADA cubaan semula automatik.
+            throw new SppkmsPostSentException(
+                "SPPKMS {$endpoint}: POST berjaya (recno={$recno}) tetapi gagal simpan status DONE tempatan: "
+                .$e->getMessage().'. SEMAK MANUAL sebelum cuba semula (elak pendua).'
+            );
+        }
     }
 
     // ------------------------------------------------------------------

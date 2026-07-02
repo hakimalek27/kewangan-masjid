@@ -21,4 +21,7 @@ interface GdriveClientInterface
 
     /** Padam fail Google Drive (retensi). Tiada-op jika fileId tidak wujud. */
     public function deleteFile(string $fileId): void;
+
+    /** Muat turun kandungan mentah fail Google Drive (untuk uji-pulih backup — E6). */
+    public function download(string $fileId): string;
 }

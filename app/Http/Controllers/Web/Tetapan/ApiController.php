@@ -94,9 +94,9 @@ class ApiController extends Controller
     {
         $data = $request->validate([
             'event'      => ['required', 'in:'.implode(',', self::EVENTS)],
-            'target_url' => ['required', 'url', 'max:255'],
+            'target_url' => ['required', 'url', 'max:255', $this->bukanHosDalaman()],
             'secret'     => ['nullable', 'string', 'max:120'],
-            'client_id'  => ['nullable', 'integer'],
+            'client_id'  => ['nullable', 'integer', 'exists:api_client,id'],
         ]);
 
         $sub = WebhookSubscription::create([...$data, 'is_active' => 1]);
@@ -104,6 +104,27 @@ class ApiController extends Controller
             ['event' => $data['event'], 'target_url' => $data['target_url']], $sub->id);
 
         return redirect()->route('tetapan.api')->with('success', 'Langganan webhook berjaya ditambah.');
+    }
+
+    /**
+     * E9 — tolak URL yang menghala ke hos DALAMAN/tempatan (anti-SSRF): loopback,
+     * link-local (169.254 — metadata cloud), julat peribadi RFC1918, dan IPv6 setara.
+     */
+    private function bukanHosDalaman(): \Closure
+    {
+        return function (string $atribut, mixed $nilai, \Closure $gagal) {
+            $host = parse_url((string) $nilai, PHP_URL_HOST);
+            if (! $host) {
+                $gagal('URL tidak sah.');
+
+                return;
+            }
+
+            $ip = filter_var($host, FILTER_VALIDATE_IP) ? $host : gethostbyname($host);
+            if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                $gagal('URL webhook tidak boleh menghala ke alamat dalaman/tempatan.');
+            }
+        };
     }
 
     public function webhookPadam(WebhookSubscription $subscription): RedirectResponse

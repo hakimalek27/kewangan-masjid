@@ -20,9 +20,9 @@ Route::prefix('v1')->group(function () {
     // Dokumentasi OpenAPI 3.0 (tanpa auth)
     Route::get('/docs', fn () => redirect('/openapi.yaml'))->name('api.v1.docs');
 
-    // Token (tanpa auth — log sahaja)
+    // Token (tanpa auth — log sahaja). E1: had kadar (10/min per IP) elak brute-force secret.
     Route::post('/auth/token', [AuthTokenController::class, 'token'])
-        ->middleware('api.log')
+        ->middleware(['api.log', 'throttle:10,1'])
         ->name('api.v1.token');
 
     Route::middleware(['api.log', 'api.auth', 'api.throttle'])->group(function () {

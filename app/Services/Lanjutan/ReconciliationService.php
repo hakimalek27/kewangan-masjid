@@ -60,10 +60,24 @@ class ReconciliationService
                     continue;
                 }
 
+                $deskripsi = mb_substr(trim((string) ($sel[1] ?? '')), 0, 255);
+
+                // E8 — dedup: langkau baris SERUPA yang sudah wujud (elak gandaan bila
+                // fail CSV sama diimport dua kali). Padanan: bank + tarikh + debit + kredit + deskripsi.
+                $wujud = BankStatementLine::where('bank_account_id', $bank->id)
+                    ->where('tarikh', $tarikh)
+                    ->where('debit', number_format($debit, 2, '.', ''))
+                    ->where('kredit', number_format($kredit, 2, '.', ''))
+                    ->where('deskripsi', $deskripsi)
+                    ->exists();
+                if ($wujud) {
+                    continue;
+                }
+
                 BankStatementLine::create([
                     'bank_account_id' => $bank->id,
                     'tarikh'          => $tarikh,
-                    'deskripsi'       => mb_substr(trim((string) ($sel[1] ?? '')), 0, 255),
+                    'deskripsi'       => $deskripsi,
                     'debit'           => number_format($debit, 2, '.', ''),
                     'kredit'          => number_format($kredit, 2, '.', ''),
                     'baki'            => isset($sel[4]) && trim((string) $sel[4]) !== '' ? number_format($this->uraiAmaun($sel[4]), 2, '.', '') : null,

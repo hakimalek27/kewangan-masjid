@@ -33,6 +33,10 @@ Schedule::job(new UploadAuditLogOffsite)->hourly()->name('backup-log-audit');
 // backup_config.retention_days (selepas dump harian 02:00 selesai)
 Schedule::job(new PruneBackups)->dailyAt('03:30')->name('prune-backup-retensi');
 
+// Mingguan (Isnin 05:00) — uji-pulih backup terkini (E6): muat turun + sahkan
+// checksum & boleh nyahsulit; alert jika backup rosak/tak boleh dipulih.
+Schedule::command('sppkms:uji-pulih-backup')->weeklyOn(1, '05:00')->name('uji-pulih-backup');
+
 // 04:00 — sapu fail lampiran YATIM (bayaran maker-checker distash tetapi permohonan
 // tak pernah diputuskan): tiada row Attachment & bukan permohonan PENDING, umur >7 hari.
 Schedule::command('sppkms:sapu-lampiran')->dailyAt('04:00')->name('sapu-lampiran-yatim');

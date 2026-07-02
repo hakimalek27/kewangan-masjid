@@ -20,11 +20,13 @@ class GeminiDialect implements VisionExtractorInterface
 
     public function extract(string $imageBytes, string $mime, string $prompt): ExtractionResult
     {
+        // E4 — kunci API dalam HEADER (bukan query string) supaya ia TIDAK bocor ke
+        // dalam mesej ralat/log (ConnectionException::getMessage menyertakan URL penuh).
         $url = rtrim($this->baseUrl ?: 'https://generativelanguage.googleapis.com', '/')
-            .'/v1beta/models/'.$this->model.':generateContent?key='.$this->apiKey;
+            .'/v1beta/models/'.$this->model.':generateContent';
 
         try {
-            $response = Http::timeout(120)->post($url, [
+            $response = Http::timeout(120)->withHeaders(['x-goog-api-key' => $this->apiKey])->post($url, [
                 'contents' => [[
                     'parts' => [
                         ['inline_data' => ['mime_type' => $mime, 'data' => base64_encode($imageBytes)]],

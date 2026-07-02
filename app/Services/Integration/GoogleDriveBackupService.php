@@ -101,6 +101,39 @@ class GoogleDriveBackupService
         }
     }
 
+    /**
+     * E6 — uji-pulih backup TERKINI untuk sebuah masjid: muat turun dari Drive &
+     * sahkan (checksum + boleh nyahsulit). Pulang ['status'=>..., 'log'=>...].
+     * status: 'ok' | 'gagal' | 'tiada_backup' | 'tiada_config'.
+     */
+    public function ujiPulihTerkini(int $masjidId): array
+    {
+        $config = BackupConfig::withoutMasjidScope()->find($masjidId);
+        if (! $config || ! $config->is_active) {
+            return ['status' => 'tiada_config', 'log' => null];
+        }
+
+        $log = BackupLog::withoutMasjidScope()
+            ->where('masjid_id', $masjidId)
+            ->where('status', 'OK')
+            ->whereNotNull('gdrive_file_id')
+            ->latest('id')
+            ->first();
+
+        if (! $log) {
+            return ['status' => 'tiada_backup', 'log' => null];
+        }
+
+        $kandungan = $this->klien($config)->download($log->gdrive_file_id);
+        $ok = $this->ujiPulih($log, $kandungan);
+
+        if (! $ok) {
+            app(AlertService::class)->backupGagal($log);
+        }
+
+        return ['status' => $ok ? 'ok' : 'gagal', 'log' => $log];
+    }
+
     private function bacaPayload(BackupQueue $item): string
     {
         if (!$item->payload_path) {

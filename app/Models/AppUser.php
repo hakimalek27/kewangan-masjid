@@ -11,7 +11,12 @@ class AppUser extends Authenticatable
 {
     protected $table = 'app_user';
     const UPDATED_AT = null;
-    protected $guarded = [];
+    // E2 — $fillable eksplisit (bukan $guarded=[]) sebagai pertahanan mass-assignment
+    // untuk lajur sensitif (role/masjid_id/is_active) walau semua controller guna validated().
+    protected $fillable = [
+        'masjid_id', 'login', 'nama_penuh', 'role',
+        'password_hash', 'is_active', 'must_change_password', 'last_login_at',
+    ];
     protected $hidden = ['password_hash'];
     protected $casts = [
         'is_active' => 'boolean',

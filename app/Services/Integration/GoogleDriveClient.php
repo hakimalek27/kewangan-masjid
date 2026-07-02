@@ -58,6 +58,20 @@ class GoogleDriveClient implements GdriveClientInterface
         return $fileId;
     }
 
+    public function download(string $fileId): string
+    {
+        if ($fileId === '') {
+            throw new RuntimeException('fileId kosong — tidak boleh muat turun.');
+        }
+
+        $resp = $this->drive()->files->get($fileId, [
+            'alt' => 'media',
+            'supportsAllDrives' => true,
+        ]);
+
+        return (string) $resp->getBody()->getContents();
+    }
+
     public function deleteFile(string $fileId): void
     {
         if ($fileId === '') {

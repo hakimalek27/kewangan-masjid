@@ -109,6 +109,27 @@ class BackupPemantauanTest extends TestCase
         ]);
     }
 
+    // ---------- (E6) Uji-pulih backup ----------
+
+    public function test_uji_pulih_terkini_ok_dan_kesan_kerosakan(): void
+    {
+        $service = app(GoogleDriveBackupService::class);
+        $item = $this->ciptaItemBarisan('{"data":"penting"}');
+
+        // Backup → simpan cipher dalam fake + BackupLog dengan gdrive_file_id
+        $log = $service->backupItem($item);
+        $this->assertSame('OK', $log->status);
+
+        // Uji-pulih: muat turun dari fake + sahkan → OK
+        $hasil = $service->ujiPulihTerkini((int) config('sppkms.masjid_id'));
+        $this->assertSame('ok', $hasil['status']);
+
+        // Simulasi kerosakan di Drive → uji-pulih mesti kesan 'gagal'
+        $this->gdrive->simpanan[FakeGdriveClient::FILE_ID] = 'kandungan-rosak';
+        $hasilRosak = $service->ujiPulihTerkini((int) config('sppkms.masjid_id'));
+        $this->assertSame('gagal', $hasilRosak['status']);
+    }
+
     // ---------- (a) Observer per-transaksi ----------
 
     public function test_observer_kutipan_memasukkan_barisan_backup_jenis_transaction(): void
@@ -350,6 +371,8 @@ class FakeGdriveClient implements GdriveClientInterface
     public bool $gagalkan = false;
     /** @var array<int,string> fileId yang dipadam */
     public array $dipadam = [];
+    /** @var array<string,string> fileId => kandungan (untuk uji-pulih) */
+    public array $simpanan = [];
 
     public function upload(string $namaFail, string $kandungan, string $folderId): string
     {
@@ -360,6 +383,7 @@ class FakeGdriveClient implements GdriveClientInterface
         $this->namaFail = $namaFail;
         $this->kandungan = $kandungan;
         $this->folderId = $folderId;
+        $this->simpanan[self::FILE_ID] = $kandungan;
 
         return self::FILE_ID;
     }
@@ -367,5 +391,10 @@ class FakeGdriveClient implements GdriveClientInterface
     public function deleteFile(string $fileId): void
     {
         $this->dipadam[] = $fileId;
+    }
+
+    public function download(string $fileId): string
+    {
+        return $this->simpanan[$fileId] ?? throw new \RuntimeException('fileId tidak wujud dalam fake.');
     }
 }

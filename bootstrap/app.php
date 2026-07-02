@@ -128,4 +128,26 @@ return Application::configure(basePath: dirname(__DIR__))
                 return $apiError('VALIDATION_ERROR', $e->getMessage(), 400);
             }
         });
+
+        /*
+         | E5 — tangkap-semua untuk /v1: sebarang exception lain (QueryException,
+         | TypeError, dll) MESTI patuhi envelope { error: { code, message } } dengan
+         | 500, BUKAN badan/stack lalai Laravel. Exception yang sudah ada pengendali
+         | khusus / render() sendiri dilangkau (return null → biar pengendali itu jalan).
+         */
+        $exceptions->renderable(function (Throwable $e, Request $request) use ($apiError) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+            if ($e instanceof ValidationException || $e instanceof AuthenticationException
+                || $e instanceof NotFoundHttpException || $e instanceof InvalidArgumentException
+                || $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+                || method_exists($e, 'render')) {
+                return null;
+            }
+
+            report($e); // kekal log penuh ke error_log untuk siasatan
+
+            return $apiError('INTERNAL', 'Ralat pelayan dalaman.', 500);
+        });
     })->create();

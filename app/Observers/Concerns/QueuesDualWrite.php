@@ -59,26 +59,33 @@ trait QueuesDualWrite
     protected function tandaPerluPadamManual(Model $model, string $sourceType): void
     {
         try {
+            // E7/L2 — DONE (recno diketahui) DAN FAILED (POST mungkin dihantar tetapi
+            // status tak sempat disimpan — SppkmsPostSentException) kedua-duanya mungkin
+            // WUJUD di SPPKMS lama → amaran padam manual untuk kedua-duanya.
             $sync = SppkmsSync::withoutMasjidScope()
                 ->where('masjid_id', (int) $model->masjid_id)
                 ->where('source_type', $sourceType)
                 ->where('source_id', $model->getKey())
-                ->where('status', 'DONE')
+                ->whereIn('status', ['DONE', 'FAILED'])
                 ->first();
 
             if (!$sync) {
                 return;
             }
 
+            $rujukan = $sync->sppkms_recno
+                ? "recno {$sync->sppkms_recno}"
+                : "status {$sync->status} (recno tidak pasti — POST mungkin berjaya)";
+
             $sync->update([
-                'last_error' => "PERLU PADAM MANUAL di SPPKMS (recno {$sync->sppkms_recno})",
+                'last_error' => "PERLU PADAM MANUAL di SPPKMS ({$rujukan})",
             ]);
 
             app(AlertService::class)->hantar(
                 (int) $model->masjid_id,
                 "⚠️ DUAL-WRITE: rekod dibatalkan di sistem baharu\n"
                 ."Jenis: {$sourceType} #{$model->getKey()}\n"
-                ."Rekod SPPKMS lama recno {$sync->sppkms_recno} PERLU DIPADAM MANUAL\n"
+                ."Rekod SPPKMS lama ({$rujukan}) PERLU DISEMAK & DIPADAM MANUAL\n"
                 .'(SPPKMS tiada endpoint padam selamat untuk automasi).'
             );
         } catch (Throwable $e) {
