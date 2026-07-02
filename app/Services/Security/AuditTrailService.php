@@ -3,6 +3,8 @@
 namespace App\Services\Security;
 
 use App\Models\AuditTrail;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,7 +29,24 @@ class AuditTrailService
 
         $req = request();
 
-        return DB::transaction(function () use ($action, $entity, $before, $after, $entityId, $userId, $masjidId, $req) {
+        /*
+         | C1 — kunci per-masjid supaya tulisan rantai audit yang serentak diselirikan
+         | (elak dua baris berkongsi prev_hash → rantai bercabang). Di bawah REPEATABLE
+         | READ InnoDB, gap-lock pada `lockForUpdate` tail sudah banyak melindungi; kunci
+         | ini menambah perlindungan (juga di bawah READ COMMITTED). MERENDAH DENGAN ANGGUN:
+         | jika kunci gagal diperoleh, TERUSKAN tanpa kunci — jangan gagalkan transaksi
+         | kewangan hanya kerana perincian rantai audit.
+        */
+        $lock = Cache::lock('audit-chain:'.($masjidId ?? 'sistem'), 10);
+        $dikunci = false;
+        try {
+            $dikunci = $lock->block(5);
+        } catch (LockTimeoutException) {
+            $dikunci = false;
+        }
+
+        try {
+            return DB::transaction(function () use ($action, $entity, $before, $after, $entityId, $userId, $masjidId, $req) {
             /*
              | PENTING: query prev_hash MESTI buang skop global BelongsToMasjid.
              | Jika tidak, apabila $masjidId (sasaran) ≠ current.masjid_id (sesi),
@@ -71,6 +90,11 @@ class AuditTrailService
                 'row_hash'    => $rowHash,
                 'created_at'  => $now,
             ]);
-        });
+            });
+        } finally {
+            if ($dikunci) {
+                $lock->release();
+            }
+        }
     }
 }

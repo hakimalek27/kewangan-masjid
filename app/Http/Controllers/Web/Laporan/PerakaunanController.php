@@ -193,8 +193,8 @@ class PerakaunanController extends Controller
     public function untungRugi(Request $request)
     {
         $tahun = (int) $request->input('year', now()->year);
-        $dari = sprintf('%04d-%02d', (int) $request->input('dari_year', $tahun), (int) $request->input('dari_bln', 1));
-        $hingga = sprintf('%04d-%02d', $tahun, (int) $request->input('bln', now()->month));
+        $dari = \App\Support\PeriodInput::ym($request->input('dari_year', $tahun), $request->input('dari_bln', 1));
+        $hingga = \App\Support\PeriodInput::ym($tahun, $request->input('bln', now()->month));
         if ($dari > $hingga) {
             [$dari, $hingga] = [$hingga, $dari];
         }
@@ -253,9 +253,9 @@ class PerakaunanController extends Controller
     public function program(Request $request)
     {
         $dari = $request->filled('dari_year')
-            ? sprintf('%04d-%02d', (int) $request->input('dari_year'), (int) $request->input('dari_bln', 1)) : null;
+            ? \App\Support\PeriodInput::ym($request->input('dari_year'), $request->input('dari_bln', 1)) : null;
         $hingga = $request->filled('year')
-            ? sprintf('%04d-%02d', (int) $request->input('year'), (int) $request->input('bln', 12)) : null;
+            ? \App\Support\PeriodInput::ym($request->input('year'), $request->input('bln', 12)) : null;
 
         $program = $this->report->programReport($dari, $hingga);
         $jumlah = [
@@ -281,7 +281,7 @@ class PerakaunanController extends Controller
 
     private function periodYm(Request $request): string
     {
-        return sprintf('%04d-%02d', (int) $request->input('year', now()->year), (int) $request->input('bln', now()->month));
+        return \App\Support\PeriodInput::ym($request->input('year'), $request->input('bln'));
     }
 
     private function julatTarikh(Request $request): array

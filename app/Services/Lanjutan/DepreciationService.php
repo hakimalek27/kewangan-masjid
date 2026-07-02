@@ -124,9 +124,10 @@ class DepreciationService
 
                 $jadual->update(['amaun' => number_format($amaun, 2, '.', ''), 'posted' => 1, 'voucher_id' => $voucher->id]);
 
-                $baru = round((float) $aset->accumulated_depn + $amaun, 2);
+                // C2 — kemas kini ATOM (elak lost-update bila dua bulan diposkan serentak).
+                // increment() = `SET accumulated_depn = accumulated_depn + ?` di peringkat SQL.
                 FixedAsset::withoutMasjidScope()->whereKey($aset->id)
-                    ->update(['accumulated_depn' => number_format($baru, 2, '.', '')]);
+                    ->increment('accumulated_depn', $amaun);
 
                 $this->audit->log('CREATE', 'depreciation_schedule', null, [
                     'aset' => $aset->kod_aset, 'period' => $periodYm, 'amaun' => number_format($amaun, 2, '.', ''),
@@ -181,6 +182,13 @@ class DepreciationService
         $lines[] = ['coa_id' => $aset->coa_id, 'debit' => 0, 'kredit' => $kos, 'memo' => 'Pelupusan kos '.$aset->kod_aset];
 
         return DB::transaction(function () use ($aset, $sebab, $tarikh, $lines, $masjidId) {
+            // C3 — kunci baris aset & semak status SEMULA dalam transaksi supaya klik
+            // "Lupus" dua kali (serentak/berturut) tidak mencipta DUA voucher pelupusan.
+            $segar = FixedAsset::withoutMasjidScope()->whereKey($aset->id)->lockForUpdate()->firstOrFail();
+            if ($segar->status !== 'AKTIF') {
+                throw new InvalidArgumentException("Aset {$aset->kod_aset} bukan AKTIF — tidak boleh dilupuskan.");
+            }
+
             $voucher = $this->journal->post(
                 tarikh: $tarikh,
                 sourceType: SourceType::PELUPUSAN,

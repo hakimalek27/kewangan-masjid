@@ -253,7 +253,7 @@ class PenyataController extends Controller
 
     private function periodYm(Request $request): string
     {
-        return sprintf('%04d-%02d', (int) $request->input('year', now()->year), (int) $request->input('bln', now()->month));
+        return \App\Support\PeriodInput::ym($request->input('year'), $request->input('bln'));
     }
 
     private function format(Request $request): ?string

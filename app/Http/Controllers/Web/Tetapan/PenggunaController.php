@@ -147,6 +147,20 @@ class PenggunaController extends Controller
     /** Segerak tugasan masjid pemerhati (pivot user_masjid); bukan pemerhati → kosongkan. */
     private function segerakTugasan(AppUser $user, string $role, array $masjidIds): void
     {
-        $user->masjids()->sync($role === UserRole::VIEWER->value ? array_map('intval', $masjidIds) : []);
+        $ids = $role === UserRole::VIEWER->value ? array_map('intval', $masjidIds) : [];
+
+        /*
+         | B5 — pelaku BUKAN-admin hanya boleh menugaskan pemerhati kepada masjid yang
+         | BOLEH DICAPAI olehnya (lazimnya masjidnya sendiri). Tanpa tapisan ini,
+         | bendahari boleh menetapkan masjid_ids ke masjid LAIN (Rule::exists tidak
+         | berskop) → pemerhati yang dikawalnya membaca data silang-penyewa.
+        */
+        $pelaku = auth()->user();
+        if ($pelaku && ! $pelaku->isAdmin()) {
+            $dibenarkan = $pelaku->accessibleMasjidIds();
+            $ids = array_values(array_intersect($ids, $dibenarkan));
+        }
+
+        $user->masjids()->sync($ids);
     }
 }
