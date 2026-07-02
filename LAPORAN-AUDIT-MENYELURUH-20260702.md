@@ -118,6 +118,15 @@ Isu sebenar terletak pada **(a) 4 pepijat kod** (2 kelihatan sekarang, 2 laten s
 
 ---
 
+## STATUS PELAKSANAAN (2 Jul 2026) — SEMUA DIBAIKI, 262/262 UJIAN LULUS
+Dilaksanakan pada cabang `fix/audit-20260702` (pelan: `PELAN-PEMBAIKAN-AUDIT-20260702.md`; sejarah: `spm-explore/SEJARAH-KERJA.md` §7p).
+- **DIBAIKI + diuji:** A1–A5, B1, B2, B3, B4, B5, C1–C6, C8, E1, E2, E4, E5, E6, E7, E8, E9, E13.
+- **DIDOKUMEN (sengaja tidak diubah):** C7 (dashboard rekupmen = V1-faithful buku-tunai; mengubah akan pecah tally 899,569.50); D1–D4 (SoD — pengguna pilih kekal bendahari/pentadbir; docstring dibetulkan); E10 (prompt-injection — impak terhad, manusia sahkan); E11 (paksi tarikh vs period_ym — sengaja); E12 (baucer_no pendua warisan — angka betul, UNIQUE retro akan gagal).
+- **Pengesahan prod:** verify-balance 3778 seimbang; verify-audit-chain 9 baris utuh; tally 2024 belanja 927720.76 (tak berubah).
+- **Baki go-live:** merge cabang; regen install.sql untuk fresh install; tukar kata laluan sebenar (`php artisan sppkms:reset-default-passwords`).
+
+---
+
 ## KEUTAMAAN PEMBAIKAN
 1. **Go-live:** A1–A5 (config + kredensial + buang masjid 50).
 2. **Pepijat kelihatan sekarang:** B1 (rantai audit), B2 (penyata bank rekupmen), C7 (dashboard vs penyata).
