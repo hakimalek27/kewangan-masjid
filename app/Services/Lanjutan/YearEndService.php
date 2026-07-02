@@ -83,55 +83,74 @@ class YearEndService
             throw new LogicException("Tahun $tahun telah pun ditutup (voucher YE-$tahun wujud).");
         }
 
-        // Baki kumulatif setiap akaun Hasil/Belanja sehingga hujung tahun
-        // (termasuk 'YYYY-00' pembukaan & penutupan tahun-tahun terdahulu 'YYYY-13').
-        // NOTA: hanya akaun boleh-pos (bukan kepala, aktif) — data migrasi V1 ada
-        // baki pada beberapa KOD KEPALA; JournalService menolak kod kepala, jadi
-        // baki tersebut kekal dalam Lebihan Terkumpul (laporan tidak terjejas:
-        // P&L tapis tempoh, BS mengira Hasil/Belanja + Ekuiti secara kumulatif).
-        $rows = DB::table('journal_entry as je')
-            ->join('journal_voucher as jv', 'jv.id', '=', 'je.voucher_id')
-            ->join('coa as c', 'c.id', '=', 'je.coa_id')
-            ->where('jv.status', 'POSTED')
-            ->where('jv.masjid_id', $masjidId)
-            ->where('jv.period_ym', '<=', "$tahun-12")
-            ->whereIn('c.jenis', ['Hasil', 'Belanja'])
-            ->where('c.is_header', 0)
-            ->where('c.is_active', 1)
-            ->groupBy('je.coa_id', 'c.kod')
-            ->orderBy('c.kod')
-            ->selectRaw('je.coa_id, c.kod, ROUND(SUM(je.debit - je.kredit),2) as baki_dr')
-            ->get()
-            ->filter(fn ($r) => abs((float) $r->baki_dr) >= 0.005);
-
-        if ($rows->isEmpty()) {
-            throw new LogicException("Tiada baki Hasil/Belanja untuk ditutup bagi tahun $tahun.");
+        // C4 — WAJIB tutup tahun N-1 dahulu jika ia ADA aktiviti Hasil/Belanja belum
+        // ditutup. Jika tidak, jumlah kumulatif (period_ym <= 'YYYY-12') akan melipat
+        // baki tahun terdahulu ke dalam voucher penutupan tahun ini, dan kunci tempoh
+        // menjadikannya TAK BOLEH dibetulkan. (Tahun pertama berdata dibenarkan kerana
+        // tahun sebelumnya tiada aktiviti.)
+        $tahunSebelum = $tahun - 1;
+        $plSebelum = $this->report->profitLoss("$tahunSebelum-01", "$tahunSebelum-12", $masjidId);
+        $adaAktivitiSebelum = abs((float) $plSebelum['jumlah_hasil']) >= 0.005
+            || abs((float) $plSebelum['jumlah_belanja']) >= 0.005;
+        if ($adaAktivitiSebelum && ! $this->voucherPenutupan($tahunSebelum, $masjidId)) {
+            throw new LogicException("Tutup tahun $tahunSebelum dahulu sebelum menutup tahun $tahun.");
         }
 
-        $lines = [];
-        $bersih = '0.00'; // (+) lebihan, (−) kurangan
-        foreach ($rows as $r) {
-            $baki = (float) $r->baki_dr;
-            if ($baki < 0) {
-                // baki kredit (lazimnya Hasil) → Dr untuk sifarkan
-                $lines[] = ['coa_id' => (int) $r->coa_id, 'debit' => -$baki, 'kredit' => 0, 'memo' => 'Penutupan '.$tahun];
-                $bersih = bcadd($bersih, number_format(-$baki, 2, '.', ''), 2);
-            } else {
-                // baki debit (lazimnya Belanja) → Cr untuk sifarkan
-                $lines[] = ['coa_id' => (int) $r->coa_id, 'debit' => 0, 'kredit' => $baki, 'memo' => 'Penutupan '.$tahun];
-                $bersih = bcsub($bersih, number_format($baki, 2, '.', ''), 2);
-            }
-        }
-
-        // Baki bersih → DANA TERKUMPUL 100-10000
         $dana = $this->journal->coaByKod(config('sppkms.coa.dana_terkumpul'), $masjidId);
-        if (bccomp($bersih, '0.00', 2) > 0) {
-            $lines[] = ['coa_id' => $dana->id, 'debit' => 0, 'kredit' => $bersih, 'memo' => "Lebihan tahun $tahun"];
-        } elseif (bccomp($bersih, '0.00', 2) < 0) {
-            $lines[] = ['coa_id' => $dana->id, 'debit' => bcmul($bersih, '-1', 2), 'kredit' => 0, 'memo' => "Kurangan tahun $tahun"];
-        }
+        $bersih = '0.00';
 
-        $voucher = DB::transaction(function () use ($tahun, $lines, $bersih, $masjidId) {
+        $voucher = DB::transaction(function () use ($tahun, $masjidId, $dana, &$bersih) {
+            // Semak semula dalam transaksi (cegah tutup-dua-kali berlumba).
+            if ($this->voucherPenutupan($tahun, $masjidId)) {
+                throw new LogicException("Tahun $tahun telah pun ditutup (voucher YE-$tahun wujud).");
+            }
+
+            // C4 — KUNCI tempoh DAHULU supaya sebarang pos baharu ke tahun ini ditolak
+            // (assertOpen), kemudian kira baki DALAM transaksi (kurangkan tetingkap TOCTOU).
+            $this->period->lockUntil("$tahun-12", $masjidId);
+
+            // Baki kumulatif setiap akaun Hasil/Belanja sehingga hujung tahun
+            // (termasuk 'YYYY-00' pembukaan & penutupan terdahulu 'YYYY-13').
+            // Hanya akaun boleh-pos (bukan kepala, aktif).
+            $rows = DB::table('journal_entry as je')
+                ->join('journal_voucher as jv', 'jv.id', '=', 'je.voucher_id')
+                ->join('coa as c', 'c.id', '=', 'je.coa_id')
+                ->where('jv.status', 'POSTED')
+                ->where('jv.masjid_id', $masjidId)
+                ->where('jv.period_ym', '<=', "$tahun-12")
+                ->whereIn('c.jenis', ['Hasil', 'Belanja'])
+                ->where('c.is_header', 0)
+                ->where('c.is_active', 1)
+                ->groupBy('je.coa_id', 'c.kod')
+                ->orderBy('c.kod')
+                ->selectRaw('je.coa_id, c.kod, ROUND(SUM(je.debit - je.kredit),2) as baki_dr')
+                ->get()
+                ->filter(fn ($r) => abs((float) $r->baki_dr) >= 0.005);
+
+            if ($rows->isEmpty()) {
+                throw new LogicException("Tiada baki Hasil/Belanja untuk ditutup bagi tahun $tahun.");
+            }
+
+            $lines = [];
+            $bersih = '0.00'; // (+) lebihan, (−) kurangan (dikongsi keluar untuk webhook)
+            foreach ($rows as $r) {
+                $baki = (float) $r->baki_dr;
+                if ($baki < 0) {
+                    $lines[] = ['coa_id' => (int) $r->coa_id, 'debit' => -$baki, 'kredit' => 0, 'memo' => 'Penutupan '.$tahun];
+                    $bersih = bcadd($bersih, number_format(-$baki, 2, '.', ''), 2);
+                } else {
+                    $lines[] = ['coa_id' => (int) $r->coa_id, 'debit' => 0, 'kredit' => $baki, 'memo' => 'Penutupan '.$tahun];
+                    $bersih = bcsub($bersih, number_format($baki, 2, '.', ''), 2);
+                }
+            }
+
+            // Baki bersih → DANA TERKUMPUL 100-10000
+            if (bccomp($bersih, '0.00', 2) > 0) {
+                $lines[] = ['coa_id' => $dana->id, 'debit' => 0, 'kredit' => $bersih, 'memo' => "Lebihan tahun $tahun"];
+            } elseif (bccomp($bersih, '0.00', 2) < 0) {
+                $lines[] = ['coa_id' => $dana->id, 'debit' => bcmul($bersih, '-1', 2), 'kredit' => 0, 'memo' => "Kurangan tahun $tahun"];
+            }
+
             $voucher = $this->journal->post(
                 tarikh: "$tahun-12-31",
                 sourceType: SourceType::JURNAL,
@@ -143,7 +162,7 @@ class YearEndService
                 masjidId: $masjidId,
             );
 
-            $this->period->lockUntil("$tahun-12", $masjidId);
+            // (Tempoh sudah dikunci di awal transaksi — tidak perlu ulang.)
 
             $this->audit->log('APPROVE', 'journal_voucher', null, [
                 'tindakan' => 'TUTUP_TAHUN',

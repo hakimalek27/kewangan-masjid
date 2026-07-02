@@ -57,6 +57,12 @@ class ReportService
     {
         $rows = $this->base($masjidId)
             ->whereBetween('jv.period_ym', [$dariYm, $hinggaYm])
+            // Hanya bulan operasi 01..12. Kecualikan baki awal ('YYYY-00') & voucher
+            // penutupan tahun ('YYYY-13') — jika tidak, julat merentas tahun (cth
+            // 2024-01..2025-12) akan menyerap voucher YE-2024 & OB-2025 dan meng-
+            // herotkan Hasil/Belanja tahun ditutup (B3). TB/BS guna cutoff '<=' —
+            // memang PATUT masuk '00'/'13', jadi TIDAK diubah di sana.
+            ->whereRaw("SUBSTRING(jv.period_ym, 6, 2) BETWEEN '01' AND '12'")
             ->whereIn('c.jenis', ['Hasil', 'Belanja'])
             ->groupBy('c.id', 'c.kod', 'c.nama', 'c.jenis')
             ->orderBy('c.kod')

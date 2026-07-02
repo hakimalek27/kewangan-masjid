@@ -179,6 +179,39 @@ class ApiV1Test extends TestCase
         $this->assertSame($kiraSelepasPertama, Kutipan::withoutMasjidScope()->count(), 'Tiada kutipan kedua dicipta');
     }
 
+    // (g2) Key sama + BADAN berbeza → 409 CONFLICT (M2) — jangan main-semula respons salah
+    public function test_idempotency_key_sama_badan_berbeza_409(): void
+    {
+        $key = (string) Str::uuid();
+        $kepala = [...$this->kepala(), 'Idempotency-Key' => $key];
+
+        $this->withHeaders($kepala)->postJson('/v1/receipts', $this->badanResit())->assertStatus(201);
+
+        $badanLain = [...$this->badanResit(), 'amount' => 999.00, 'receipt_no' => 'auto'];
+        $this->withHeaders($kepala)->postJson('/v1/receipts', $badanLain)
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'CONFLICT');
+    }
+
+    // (g3) Key sama merentas ENDPOINT berbeza → tidak berlanggar (M1/E3)
+    public function test_idempotency_key_sama_endpoint_berbeza_tidak_berlanggar(): void
+    {
+        $key = (string) Str::uuid();
+
+        $this->withHeaders([...$this->kepala(), 'Idempotency-Key' => $key])
+            ->postJson('/v1/receipts', $this->badanResit())->assertStatus(201);
+
+        // Key SAMA tetapi endpoint /payments → mesti diproses (bukan replay resit)
+        $this->withHeaders([...$this->kepala(), 'Idempotency-Key' => $key])
+            ->postJson('/v1/payments', [
+                'date' => '2026-06-12', 'coa' => '600-06000', 'amount' => 55.00,
+                'method' => 'EFT', 'bank_slot' => 1, 'payee' => 'UJI E3',
+                'voucher_no' => 'auto', 'program' => 'JAMUAN', 'description' => 'UJI E3',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('status', 'POSTED');
+    }
+
     // (h) POST /v1/payments → 201
     public function test_post_payments_berjaya_201(): void
     {
