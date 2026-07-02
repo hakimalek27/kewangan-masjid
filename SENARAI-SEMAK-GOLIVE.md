@@ -31,5 +31,16 @@ Ikut turutan ini sebelum sistem digunakan sebenar.
 - [ ] `php artisan test` → semua LULUS.
 - [ ] Backup pertama berjaya + `ujiPulih` (restore-test) lulus.
 
-## 6. Selepas kemas kini kod (elak UI/tingkah laku lama)
+## 6. Aset frontend (Vite) — WAJIB, elak carta/JS rosak
+- [ ] `npm run build` (hasilkan `public/build/` terkini).
+- [ ] **Pastikan `public/hot` TIADA** — jika wujud, `@vite` cuba muat dari pelayan dev
+      (`:5174`) yang tak wujud di prod → `window.Chart is not a constructor` & JS rosak
+      pada dashboard/statistik. Padam: `rm -f public/hot`.
+
+## 7. Selepas kemas kini kod (elak UI/tingkah laku lama)
 - [ ] `php artisan optimize:clear` + RESTART pelayan web (buang OPcache).
+
+## 8. Ujian pra-go-live
+- [ ] `php artisan test` → semua LULUS (262+).
+- [ ] E2E pelayar: hidupkan serve ke klon (`DB_DATABASE=sppkms_test php artisan serve --port=8123`)
+      + `npx playwright test` → isolasi peranan + smoke-crawl semua halaman LULUS.
