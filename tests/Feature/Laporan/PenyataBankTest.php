@@ -70,4 +70,37 @@ class PenyataBankTest extends TestCase
         $this->assertCount(1, $penyataB['baki_akhir']);
         $this->assertSame('250-05020', $penyataB['baki_akhir'][0]->kod);
     }
+
+    /**
+     * B2 — penyata SATU BANK bulan ber-REKUPMEN mesti SEIMBANG (kiri = kanan).
+     * Sebelum fix: rekupmen ditambah dua sisi → kiri > kanan sebanyak jumlah rekupmen.
+     */
+    public function test_penyata_ikut_bank_seimbang_walau_ada_rekupmen(): void
+    {
+        $mid = config('sppkms.masjid_id');
+        $bankA = BankAccount::withoutMasjidScope()->where('masjid_id', $mid)
+            ->where('coa_id', $this->coaId('250-05010'))->firstOrFail();
+
+        $svc = app(StatementService::class);
+
+        // 2024-01: data sejarah ada rekupmen RM944.90 dari bank AFFIN (250-05010)
+        $bank = $svc->monthly('2024-01', $mid, $bankA->id);
+        $gabung = $svc->monthly('2024-01', $mid);
+
+        $this->assertTrue($bank['satu_bank']);
+        $this->assertGreaterThan(0, (float) $bank['jumlah_pindahan'], 'Prasyarat: bulan ini ada rekupmen.');
+
+        // Penyata SATU BANK seimbang
+        $this->assertSame($bank['jumlah_kiri'], $bank['jumlah_kanan'],
+            'Penyata ikut bank mesti seimbang walau ada rekupmen (B2).');
+        // Kiri satu-bank TIDAK termasuk pindahan; kanan termasuk pindahan
+        $this->assertSame(
+            number_format((float) $bank['jumlah_baki_awal'] + (float) $bank['jumlah_terimaan'], 2, '.', ''),
+            $bank['jumlah_kiri']
+        );
+
+        // Penyata GABUNGAN juga seimbang (pindahan dua sisi — kekal betul)
+        $this->assertFalse($gabung['satu_bank']);
+        $this->assertSame($gabung['jumlah_kiri'], $gabung['jumlah_kanan']);
+    }
 }

@@ -14,6 +14,7 @@
     $isTahun   = ($jenis ?? 'bulanan') === 'tahunan';
     $thn       = $tahun ?? null;
     $jPindahan = $p['jumlah_pindahan'] ?? ($pindahan ?? collect($p['pindahan_pwr'] ?? [])->sum('jumlah'));
+    $satuBank  = $p['satu_bank'] ?? false;
     $fmt       = fn ($v) => number_format((float) $v, 2);
     $seimbang  = $fmt($jumlahKiri) === $fmt($jumlahKanan);
 
@@ -24,10 +25,13 @@
         ['tajuk' => $isTahun ? '2. TERIMAAN TAHUN '.$thn : '2. TERIMAAN / KUTIPAN', 'sisi' => 'T',
          'baris' => collect($p['terimaan']), 'amaun' => 'jumlah', 'kosong' => 'Tiada rekod kutipan',
          'jLabel' => 'Jumlah Terimaan', 'jumlah' => $p['jumlah_terimaan']],
-        ['tajuk' => 'PELARASAN PINDAHAN TUNAI (PWR)', 'italic' => true,
-         'baris' => collect($p['pindahan_pwr'] ?? []), 'amaun' => 'jumlah',
-         'jLabel' => 'Jumlah Pindahan PWR', 'jumlah' => $jPindahan],
     ];
+    // Rekupmen di KIRI hanya untuk penyata GABUNGAN (kontra neutral); satu-bank → KANAN sahaja (B2).
+    if (! $satuBank) {
+        $kiri[] = ['tajuk' => 'PELARASAN PINDAHAN TUNAI (PWR)', 'italic' => true,
+            'baris' => collect($p['pindahan_pwr'] ?? []), 'amaun' => 'jumlah',
+            'jLabel' => 'Jumlah Pindahan PWR', 'jumlah' => $jPindahan];
+    }
     $kanan = [
         ['tajuk' => $isTahun ? '1. PERBELANJAAN TAHUN '.$thn : '1. PERBELANJAAN', 'sisi' => 'B',
          'baris' => collect($p['belanja']), 'amaun' => 'jumlah', 'kosong' => 'Tiada rekod belanja',

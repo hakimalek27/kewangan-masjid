@@ -70,18 +70,35 @@ class StatementService
         $jumlahBelanja  = round((float) $belanja->sum('jumlah'), 2);
         $jumlahBakiAwal  = round((float) collect($bakiAwal)->sum('baki'), 2);
         $jumlahBakiAkhir = round((float) collect($bakiAkhir)->sum('baki'), 2);
+        $jumlahPindahan  = round((float) $pindahanPwr->sum('jumlah'), 2);
+
+        /*
+         | Pelarasan Pindahan PWR (rekupmen bank→PWR):
+         |  - Penyata GABUNGAN (semua tunai): rekupmen NEUTRAL (bank↔PWR dalam kumpulan
+         |    tunai) → papar di KEDUA-DUA sisi supaya kekal seimbang & kelihatan.
+         |  - Penyata SATU BANK: rekupmen ialah aliran KELUAR bersih bank itu yang SUDAH
+         |    diserap baki_akhir → papar di sisi KANAN sahaja (aliran keluar), JANGAN di kiri
+         |    (jika tidak KIRI melebihi KANAN sebanyak jumlah rekupmen — pepijat B2).
+         */
+        $satuBank = $bankAccountId !== null;
+        $jumlahKiri  = round($jumlahBakiAwal + $jumlahTerimaan + ($satuBank ? 0.0 : $jumlahPindahan), 2);
+        $jumlahKanan = round($jumlahBelanja + $jumlahPindahan + $jumlahBakiAkhir, 2);
 
         return [
             'period'            => $periodYm,
+            'satu_bank'         => $satuBank,
             'baki_awal'         => $bakiAwal,
             'jumlah_baki_awal'  => number_format($jumlahBakiAwal, 2, '.', ''),
             'terimaan'          => $terimaan,
             'jumlah_terimaan'   => number_format($jumlahTerimaan, 2, '.', ''),
             'pindahan_pwr'      => $pindahanPwr,
+            'jumlah_pindahan'   => number_format($jumlahPindahan, 2, '.', ''),
             'belanja'           => $belanja,
             'jumlah_belanja'    => number_format($jumlahBelanja, 2, '.', ''),
             'baki_akhir'        => $bakiAkhir,
             'jumlah_baki_akhir' => number_format($jumlahBakiAkhir, 2, '.', ''),
+            'jumlah_kiri'       => number_format($jumlahKiri, 2, '.', ''),
+            'jumlah_kanan'      => number_format($jumlahKanan, 2, '.', ''),
         ];
     }
 

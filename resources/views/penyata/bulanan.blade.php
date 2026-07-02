@@ -81,6 +81,9 @@
                             @endforelse
                             <tr class="fw-bold"><td class="text-end">{{ __('Jumlah Terimaan') }}</td><td class="text-end">{{ number_format((float) $p['jumlah_terimaan'], 2) }}</td></tr>
 
+                            {{-- Rekupmen di sisi KIRI hanya untuk penyata GABUNGAN (kontra neutral).
+                                 Penyata SATU BANK papar rekupmen sebagai aliran keluar di sisi KANAN sahaja (B2). --}}
+                            @unless ($p['satu_bank'] ?? false)
                             <tr class="table-secondary fw-bold"><td colspan="2">{{ __('3. PELARASAN PINDAHAN PWR') }}</td></tr>
                             @forelse ($p['pindahan_pwr'] as $r)
                                 <tr><td class="ps-4">{{ $r->kod }} {{ $r->nama }}</td><td class="text-end">{{ number_format((float) $r->jumlah, 2) }}</td></tr>
@@ -88,6 +91,7 @@
                                 <tr><td colspan="2" class="text-muted ps-4">{{ __('Tiada pindahan.') }}</td></tr>
                             @endforelse
                             <tr class="fw-bold"><td class="text-end">{{ __('Jumlah Pindahan PWR') }}</td><td class="text-end">{{ number_format((float) $pindahan, 2) }}</td></tr>
+                            @endunless
                         </tbody>
                         <tfoot>
                             <tr class="table-dark fw-bold"><td class="text-end">{{ __('JUMLAH') }}</td><td class="text-end">{{ number_format((float) $jumlah_kiri, 2) }}</td></tr>

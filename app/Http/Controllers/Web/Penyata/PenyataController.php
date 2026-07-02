@@ -51,9 +51,10 @@ class PenyataController extends Controller
         // Penyata Ikut Bank → tapis kepada akaun bank dipilih; penyata biasa → gabungan
         $p = $this->statement->monthly($ym, null, $bank?->id);
 
-        $pindahan = number_format((float) collect($p['pindahan_pwr'])->sum('jumlah'), 2, '.', '');
-        $jumlahKiri = number_format((float) $p['jumlah_baki_awal'] + (float) $p['jumlah_terimaan'] + (float) $pindahan, 2, '.', '');
-        $jumlahKanan = number_format((float) $p['jumlah_belanja'] + (float) $p['jumlah_baki_akhir'] + (float) $pindahan, 2, '.', '');
+        // Jumlah kiri/kanan dikira dalam StatementService (kendali betul kes satu-bank vs gabungan — B2).
+        $pindahan = $p['jumlah_pindahan'];
+        $jumlahKiri = $p['jumlah_kiri'];
+        $jumlahKanan = $p['jumlah_kanan'];
 
         $font = self::SAIZ_FONT[$request->input('font', 'sederhana')] ?? '12px';
         $nota = $request->boolean('nota');
