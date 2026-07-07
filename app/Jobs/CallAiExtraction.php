@@ -7,7 +7,6 @@ use App\Ai\AiException;
 use App\Models\AiCallLog;
 use App\Models\AiExtraction;
 use App\Models\Coa;
-use App\Models\CoaLocalMapping;
 use App\Models\DocInbox;
 use App\Models\TgBotConfig;
 use App\Models\TxnDraft;
@@ -195,28 +194,10 @@ class CallAiExtraction implements ShouldQueue
         ]);
     }
 
-    /** Petakan cadangan AI → coa.id: kod sama ATAU label tempatan sepadan (case-insensitive). */
+    /** Petakan cadangan AI → coa.id (logik dikongsi dalam CoaCadanganService). */
     private function petakanCoa(int $masjidId, ?string $cadangan): ?int
     {
-        $cadangan = trim((string) $cadangan);
-        if ($cadangan === '') {
-            return null;
-        }
-
-        $coa = Coa::withoutMasjidScope()
-            ->where('masjid_id', $masjidId)
-            ->where('kod', $cadangan)
-            ->value('id');
-        if ($coa) {
-            return (int) $coa;
-        }
-
-        $mapping = CoaLocalMapping::withoutMasjidScope()
-            ->where('masjid_id', $masjidId)
-            ->whereRaw('LOWER(local_label) = ?', [mb_strtolower($cadangan)])
-            ->value('coa_id');
-
-        return $mapping ? (int) $mapping : null;
+        return app(\App\Services\Ai\CoaCadanganService::class)->petakan($masjidId, $cadangan);
     }
 
     private function mesejRingkasan(TxnDraft $draf, AiExtraction $extraction): string

@@ -15,5 +15,12 @@ class BankStatementLine extends Model
         'kredit' => 'decimal:2',
         'baki' => 'decimal:2',
         'imported_at' => 'datetime',
+        'ai_confidence' => 'integer',
     ];
+
+    /** Batch Semak Penyata (AI) — null untuk baris import CSV manual. */
+    public function batch(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PenyataSemakan::class, 'batch_id');
+    }
 }
