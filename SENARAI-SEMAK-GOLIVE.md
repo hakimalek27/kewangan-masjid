@@ -42,5 +42,5 @@ Ikut turutan ini sebelum sistem digunakan sebenar.
 
 ## 8. Ujian pra-go-live
 - [ ] `php artisan test` → semua LULUS (262+).
-- [ ] E2E pelayar: hidupkan serve ke klon (`DB_DATABASE=sppkms_test php artisan serve --port=8123`)
+- [ ] E2E pelayar: hidupkan serve ke klon (`DB_DATABASE=spkm_test php artisan serve --port=8123`)
       + `npx playwright test` → isolasi peranan + smoke-crawl semua halaman LULUS.

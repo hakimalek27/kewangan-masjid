@@ -1,5 +1,5 @@
 // Ujian pelayar (Playwright) — model peranan baharu + pengasingan merentas-masjid.
-// Klon sppkms_test (data boleh-buang): admin/admin12345 (admin), malmutaqqin/alm12345
+// Klon spkm_test (data boleh-buang): admin/admin12345 (admin), malmutaqqin/alm12345
 // (bendahari, masjid 49), bdh_browser_b/ujianB12345 (bendahari, masjid B sementara).
 import { test, expect } from '@playwright/test'
 

@@ -1,5 +1,5 @@
 // Konfigurasi ujian pelayar (E2E) — TERPISAH daripada PHPUnit (testDir: tests-e2e).
-// Jalankan terhadap pelayan tempatan yang menunjuk ke DB KLON sppkms_test (bukan prod).
+// Jalankan terhadap pelayan tempatan yang menunjuk ke DB KLON spkm_test (bukan prod).
 import { defineConfig } from '@playwright/test'
 
 export default defineConfig({

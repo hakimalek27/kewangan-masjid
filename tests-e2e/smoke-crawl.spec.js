@@ -1,6 +1,6 @@
 // Smoke-crawl menyeluruh (Chromium): log masuk SEKALI ikut peranan, lalui SETIAP
 // halaman dalam satu sesi, kumpul status HTTP + ralat konsol/pageerror, dan sahkan
-// pautan dalaman tak rosak. Dijalankan terhadap klon sppkms_test (bukan prod).
+// pautan dalaman tak rosak. Dijalankan terhadap klon spkm_test (bukan prod).
 import { test, expect } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
