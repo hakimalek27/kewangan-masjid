@@ -14,6 +14,12 @@ use Tests\TestCase;
  *   - shots/KUNCI-KIRA-KIRA.md (BS @2026-06)
  *   - MIGRASI-SUMMARY.md (laporan program)
  * SATU SEN pun tidak boleh lari — sistem audit.
+ *
+ * NOTA REKALIBRASI (8 Jul 2026): resit duplikat 1851 (RM8,566.00, 2025-08)
+ * di-VOID dalam produksi 15 Jun (SEJARAH-KERJA §7k — rekonsiliasi bank sahkan
+ * Ogos 2025 = 52,581.98 = penyata bank tepat). Angka 2025-08, tahunan 2025 &
+ * BS @2026-06 di bawah = nilai SELEPAS void (setia produksi `spkm`); nilai
+ * lama (+8,566) hanya wujud dalam klon ujian basi pra-void.
  */
 class TallySejarahTest extends TestCase
 {
@@ -40,7 +46,7 @@ class TallySejarahTest extends TestCase
         '2025-05' => ['118520.22', '83401.40', '35118.82'],
         '2025-06' => ['59872.39', '103980.39', '-44108.00'],
         '2025-07' => ['57347.58', '58628.58', '-1281.00'],
-        '2025-08' => ['61147.98', '48215.85', '12932.13'],
+        '2025-08' => ['52581.98', '48215.85', '4366.13'],
         '2025-09' => ['55255.99', '79910.36', '-24654.37'],
         '2025-10' => ['73359.08', '44492.57', '28866.51'],
         '2025-11' => ['43825.86', '59100.12', '-15274.26'],
@@ -88,7 +94,7 @@ class TallySejarahTest extends TestCase
 
         $jangkaan = [
             2024 => ['955006.47', '927720.76', '27285.71'],
-            2025 => ['919444.89', '882894.85', '36550.04'],
+            2025 => ['910878.89', '882894.85', '27984.04'],
             2026 => ['432291.17', '425799.49', '6491.68'],
         ];
 
@@ -104,17 +110,17 @@ class TallySejarahTest extends TestCase
     {
         $bs = app(ReportService::class)->balanceSheet('2026-06');
 
-        $this->assertSame('183155.95', $bs['total_aset'], 'Total Aset');
+        $this->assertSame('174589.95', $bs['total_aset'], 'Total Aset');
         $this->assertSame('-12565.00', $bs['total_liabiliti'], 'Total Liabiliti');
-        $this->assertSame('195720.95', $bs['total_ekuiti'], 'Total Ekuiti');
-        $this->assertSame('70327.43', $bs['lebihan_terkumpul'], 'Lebihan Terkumpul 2024-2026');
+        $this->assertSame('187154.95', $bs['total_ekuiti'], 'Total Ekuiti');
+        $this->assertSame('61761.43', $bs['lebihan_terkumpul'], 'Lebihan Terkumpul 2024-2026');
         $this->assertTrue($bs['seimbang'], 'Kunci Kira-Kira mesti SEIMBANG');
 
         // Baris individu (shots/KUNCI-KIRA-KIRA.md)
         $cari = fn ($senarai, $kod) => collect($senarai)->firstWhere('kod', $kod)?->amaun;
         $this->assertSame('877.00', $cari($bs['aset'], '200-01050'));
         $this->assertSame('2507.00', $cari($bs['aset'], '200-01060'));
-        $this->assertSame('173758.17', $cari($bs['aset'], '250-05010'), 'Bank Akaun 1');
+        $this->assertSame('165192.17', $cari($bs['aset'], '250-05010'), 'Bank Akaun 1');
         $this->assertSame('1953.78', $cari($bs['aset'], '250-06010'), 'PWR Masjid');
         $this->assertSame('4060.00', $cari($bs['aset'], '250-06030'), 'PWR Rahmah Madani');
         $this->assertSame('895.00', $cari($bs['liabiliti'], '300-04020'), 'Asnaf');
@@ -139,7 +145,7 @@ class TallySejarahTest extends TestCase
         // shots/PENYATA-PENDAPATAN.md — Terima Tunai / Bayar Tunai (buku tunai)
         $jangkaan = [
             2024 => ['959433.47', '941085.61'],
-            2025 => ['928015.89', '899569.50'],
+            2025 => ['919449.89', '899569.50'],
             2026 => ['433748.17', '438318.49'],
         ];
 

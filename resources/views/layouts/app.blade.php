@@ -45,7 +45,7 @@
                 <i class="bi bi-moon-stars-fill fs-4"></i>
             @endif
             <div class="fw-bold small mt-1">{{ $masjidSemasa?->nama ?? config('app.name') }}</div>
-            <div class="sidebar-subtitle">{{ __('Sistem Pengurusan & Audit Kewangan Masjid') }}</div>
+            <div class="sidebar-subtitle">{{ __('Sistem Pengurusan Kewangan Masjid') }}</div>
         </a>
         <hr class="sidebar-divider my-0">
         <div class="sidebar-menu flex-grow-1 overflow-auto">

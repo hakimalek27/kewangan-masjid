@@ -63,7 +63,7 @@ class LaporanHttpTest extends TestCase
     {
         $this->actingAs($this->bendahari)->get(route('akaun.kunci', ['bln' => 6, 'year' => 2026]))
             ->assertOk()
-            ->assertSee('183,155.95')
+            ->assertSee('174,589.95')
             ->assertSee('SEIMBANG');
     }
 
@@ -93,11 +93,11 @@ class LaporanHttpTest extends TestCase
 
     public function test_penyata_tahunan_2025_tally(): void
     {
-        // 928,015.89 = terima tunai 2025 (disahkan tally lawan V1); format 2-lajur tahunan
+        // 919,449.89 = terima tunai 2025 (disahkan tally lawan V1); format 2-lajur tahunan
         $this->actingAs($this->bendahari)->get(route('penyata.tahunan', ['year' => 2025]))
             ->assertOk()
             ->assertSee('BAGI TAHUN BERAKHIR: 31 DISEMBER')
-            ->assertSee('928,015.89');
+            ->assertSee('919,449.89');
     }
 
     public function test_statistik_kutipan_tahunan_2025(): void

@@ -12,7 +12,7 @@
             <div class="text-center mb-4">
                 <i class="bi bi-moon-stars-fill display-5 text-primary"></i>
                 <h1 class="h4 mt-3 mb-1">{{ config('app.name') }}</h1>
-                <p class="text-muted small mb-0">{{ __('Sistem Pengurusan & Audit Kewangan Masjid') }}</p>
+                <p class="text-muted small mb-0">{{ __('Sistem Pengurusan Kewangan Masjid') }}</p>
             </div>
 
             @if ($errors->any())

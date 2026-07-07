@@ -259,13 +259,13 @@ class ApiV1Test extends TestCase
         $this->assertSame('VOID', $kutipan->voucher()->first()->status);
     }
 
-    // (j) GET /v1/reports/balance-sheet cutoff 2026-06-30 → total_aset 183155.95
+    // (j) GET /v1/reports/balance-sheet cutoff 2026-06-30 → total_aset 174589.95
     public function test_balance_sheet_tally_data_sejarah(): void
     {
         $this->withHeaders($this->kepala())
             ->getJson('/v1/reports/balance-sheet?cutoff=2026-06-30')
             ->assertOk()
-            ->assertJsonPath('total_aset', '183155.95')
+            ->assertJsonPath('total_aset', '174589.95')
             ->assertJsonPath('seimbang', true);
     }
 

@@ -158,7 +158,7 @@ class LanjutanTest extends TestCase
 
         // Kunci Kira-Kira cutoff 2026-06 MASIH sama & seimbang
         $bs = $report->balanceSheet('2026-06');
-        $this->assertSame('183155.95', $bs['total_aset'], 'Total aset BS berubah selepas tutup tahun!');
+        $this->assertSame('174589.95', $bs['total_aset'], 'Total aset BS berubah selepas tutup tahun!');
         $this->assertTrue($bs['seimbang'], 'BS tidak seimbang selepas tutup tahun!');
 
         // Tempoh dikunci sehingga 2024-12
