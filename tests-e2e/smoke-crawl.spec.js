@@ -24,14 +24,14 @@ const HALAMAN_BENDAHARI = [
   '/penyata/bulanan', '/penyata/bank', '/penyata/tahunan', '/penyata/setting',
   '/pwr/baki', '/pwr/bayar', '/pwr/buku', '/pwr/penyata',
   '/statistik/kutipan', '/statistik/kutipan-coa', '/statistik/belanja', '/statistik/belanja-coa', '/statistik/jumaat',
-  '/belanjawan', '/dana', '/rekonsiliasi', '/susut-nilai', '/kelulusan', '/draf',
+  '/belanjawan', '/dana', '/rekonsiliasi', '/semak-penyata', '/susut-nilai', '/kelulusan', '/draf',
   '/tetapan/masjid', '/tetapan/resit-baucer', '/tetapan/mapping', '/tetapan/semak-kod',
   '/tetapan/kawalan', '/tetapan/tutup-tahun', '/tetapan/kata-laluan', '/tetapan/pengguna', '/tetapan/wizard',
 ]
 
 const HALAMAN_ADMIN = [
   '/sistem', '/admin/pemantauan', '/admin/audit', '/admin/ralat', '/admin/keselamatan',
-  '/admin/backup', '/admin/dual-write', '/tetapan/ai', '/tetapan/api', '/tetapan/api/log',
+  '/admin/backup', '/admin/dual-write', '/admin/semak-penyata', '/tetapan/ai', '/tetapan/api', '/tetapan/api/log',
   '/tetapan/masjid-baru', '/tetapan/pengguna', '/tetapan/kata-laluan',
 ]
 

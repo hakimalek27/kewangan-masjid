@@ -241,7 +241,7 @@
         $coaBelanjaJson = $coaBelanja->map(fn ($c) => ['id' => $c->id, 't' => $c->kod.' — '.$c->nama])->values();
     @endphp
     <script>
-        (function () {
+        document.addEventListener('DOMContentLoaded', function () {
             const COA = { KUTIPAN: @json($coaHasilJson), BAYARAN: @json($coaBelanjaJson) };
             const rekodBase = "{{ url('/semak-penyata/baris') }}";
 
@@ -259,7 +259,7 @@
 
             // Modal Rekod
             const modalEl = document.getElementById('modalRekod');
-            const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+            const modal = modalEl ? new window.bootstrap.Modal(modalEl) : null;
             document.querySelectorAll('.btn-rekod').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     const d = btn.dataset;
@@ -283,6 +283,6 @@
                     modal.show();
                 });
             });
-        })();
+        });
     </script>
 @endsection
