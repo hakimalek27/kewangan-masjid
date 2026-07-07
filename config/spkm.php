@@ -56,6 +56,7 @@ return [
                 ['Keselamatan', 'admin.keselamatan'],
                 ['Backup Luar Tapak', 'admin.backup'],
                 ['Dual-Write SPPKMS', 'admin.dualwrite'],
+                ['Semak Penyata (AI) — Kawalan', 'admin.semakpenyata'],
             ],
         ],
         [
@@ -165,6 +166,7 @@ return [
                 ['Belanjawan', 'belanjawan.index'],
                 ['Dana & Tabung', 'dana.index'],
                 ['Rekonsiliasi Bank', 'rekonsiliasi.index'],
+                ['Semak Penyata (AI)', 'semakpenyata.index'],
                 ['Susut Nilai', 'susutnilai.index'],
                 ['Kelulusan', 'kelulusan.index'],
                 ['Tutup Tahun', 'tutuptahun.index'],

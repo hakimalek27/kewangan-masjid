@@ -6,6 +6,7 @@ use App\Http\Controllers\Web\Admin\DualWriteController;
 use App\Http\Controllers\Web\Admin\KeselamatanController;
 use App\Http\Controllers\Web\Admin\PemantauanController;
 use App\Http\Controllers\Web\Admin\RalatController;
+use App\Http\Controllers\Web\Admin\SemakPenyataAdminController;
 use App\Http\Controllers\Web\Aset\AsetController;
 use App\Http\Controllers\Web\Aset\FdController;
 use App\Http\Controllers\Web\Auth\LoginController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\Web\Lanjutan\DrafBulkController;
 use App\Http\Controllers\Web\Lanjutan\KawalanController;
 use App\Http\Controllers\Web\Lanjutan\KelulusanController;
 use App\Http\Controllers\Web\Lanjutan\RekonsiliasiController;
+use App\Http\Controllers\Web\Lanjutan\SemakPenyataController;
 use App\Http\Controllers\Web\Lanjutan\SusutNilaiController;
 use App\Http\Controllers\Web\Lanjutan\TutupTahunController;
 use App\Http\Controllers\Web\Tetapan\BakiTerkiniController;
@@ -278,6 +280,13 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         Route::post('/dual-write/kredensial', [DualWriteController::class, 'kredensial'])->name('admin.dualwrite.kredensial');
         Route::post('/dual-write/{sync}/cuba-semula', [DualWriteController::class, 'cubaSemula'])->whereNumber('sync')->name('admin.dualwrite.retry');
         Route::post('/dual-write/tertunggak', [DualWriteController::class, 'tertunggak'])->name('admin.dualwrite.tertunggak');
+
+        // Semak Penyata (AI) — kawalan pusat: kunci OpenAI, toggle global, kuota per-tenant
+        Route::get('/semak-penyata', [SemakPenyataAdminController::class, 'index'])->name('admin.semakpenyata');
+        Route::post('/semak-penyata/toggle', [SemakPenyataAdminController::class, 'toggle'])->name('admin.semakpenyata.toggle');
+        Route::post('/semak-penyata/kunci', [SemakPenyataAdminController::class, 'simpanKunci'])->name('admin.semakpenyata.kunci');
+        Route::post('/semak-penyata/kuota/{masjid}', [SemakPenyataAdminController::class, 'simpanKuota'])->whereNumber('masjid')->name('admin.semakpenyata.kuota');
+        Route::post('/semak-penyata/topup/{masjid}', [SemakPenyataAdminController::class, 'topup'])->whereNumber('masjid')->name('admin.semakpenyata.topup');
     });
 
     // Jejak audit (BACA) — admin + JURUAUDIT (semakan bebas); pengesahan POST kekal admin.
@@ -334,6 +343,11 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
     // Rekonsiliasi Bank — senarai (BACA) terbuka; tindakan (POST) = bendahari (bawah).
     Route::get('/rekonsiliasi', [RekonsiliasiController::class, 'index'])->name('rekonsiliasi.index');
 
+    // Semak Penyata (AI) — BACA + poll status/fail terbuka; tindakan (POST) = bendahari (bawah).
+    Route::get('/semak-penyata', [SemakPenyataController::class, 'index'])->name('semakpenyata.index');
+    Route::get('/semak-penyata/{batch}/status', [SemakPenyataController::class, 'status'])->whereNumber('batch')->name('semakpenyata.status');
+    Route::get('/semak-penyata/{batch}/fail', [SemakPenyataController::class, 'fail'])->whereNumber('batch')->name('semakpenyata.fail');
+
     Route::middleware('role:bendahari')->group(function () {
         Route::post('/belanjawan', [BelanjawanController::class, 'simpan'])->name('belanjawan.simpan');
         Route::post('/dana', [DanaController::class, 'simpan'])->name('dana.simpan');
@@ -346,6 +360,11 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         Route::post('/rekonsiliasi/import', [RekonsiliasiController::class, 'import'])->name('rekonsiliasi.import');
         Route::post('/rekonsiliasi/{line}/padan', [RekonsiliasiController::class, 'padan'])->whereNumber('line')->name('rekonsiliasi.padan');
         Route::post('/rekonsiliasi/{line}/abaikan', [RekonsiliasiController::class, 'abaikan'])->whereNumber('line')->name('rekonsiliasi.abaikan');
+
+        // Semak Penyata (AI) — tindakan
+        Route::post('/semak-penyata/muat-naik', [SemakPenyataController::class, 'muatNaik'])->name('semakpenyata.muatnaik');
+        Route::post('/semak-penyata/baris/{line}/rekod', [SemakPenyataController::class, 'rekod'])->whereNumber('line')->name('semakpenyata.rekod');
+        Route::post('/semak-penyata/baris/{line}/abai', [SemakPenyataController::class, 'abai'])->whereNumber('line')->name('semakpenyata.abai');
 
         // Bulk sahkan draf AI
         Route::post('/draf/bulk-sahkan', [DrafBulkController::class, 'sahkan'])->name('draf.bulk');

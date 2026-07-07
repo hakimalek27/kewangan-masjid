@@ -74,6 +74,7 @@
                     'admin.keselamatan' => ['admin'],
                     'admin.backup'      => ['admin'],
                     'admin.dualwrite'   => ['admin'],
+                    'admin.semakpenyata' => ['admin'],
                     'tetapan.ai'        => ['admin'],
                     'tetapan.api'       => ['admin'],
                     'tetapan.pengguna'  => ['admin', 'bendahari', 'pentadbir'],
