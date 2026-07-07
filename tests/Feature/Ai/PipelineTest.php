@@ -48,7 +48,7 @@ class PipelineTest extends TestCase
         config(['services.telegram.webhook_secret' => self::SECRET]);
 
         $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -56,11 +56,11 @@ class PipelineTest extends TestCase
         $this->bendahari = $buat('bendahari');
         $this->viewer = $buat('viewer');
         $this->bank = BankAccount::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))->firstOrFail();
+            ->where('masjid_id', config('spkm.masjid_id'))->firstOrFail();
 
         // Nyahaktif config sedia ada supaya config ujian sahaja dipilih (rollback selepas ujian)
-        TgBotConfig::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))->update(['is_active' => 0]);
-        AiProviderConfig::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))->update(['is_active' => 0]);
+        TgBotConfig::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))->update(['is_active' => 0]);
+        AiProviderConfig::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))->update(['is_active' => 0]);
 
         $vault = app(SecretVaultService::class);
         TgBotConfig::create([
@@ -176,7 +176,7 @@ class PipelineTest extends TestCase
         $this->assertNotNull($inbox);
         $this->assertSame('FILE-BESAR', $inbox->tg_file_id); // saiz terbesar dipilih
         $this->assertSame('RECEIVED', $inbox->status);
-        $this->assertSame((int) config('sppkms.masjid_id'), (int) $inbox->masjid_id);
+        $this->assertSame((int) config('spkm.masjid_id'), (int) $inbox->masjid_id);
 
         Queue::assertPushed(ProcessDocInbox::class, fn ($job) => $job->docInboxId === $inbox->id);
 
@@ -354,7 +354,7 @@ class PipelineTest extends TestCase
         ])->assertRedirect(route('tetapan.ai'));
 
         $baris = AiProviderConfig::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('provider', 'ANTHROPIC')->orderByDesc('id')->first();
 
         $this->assertNotNull($baris);

@@ -28,13 +28,13 @@ class WebFormTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
         $this->bendahari = $buat('bendahari');
         $this->viewer = $buat('viewer');
-        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))->firstOrFail();
+        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))->firstOrFail();
     }
 
     public function test_borang_kutipan_dipapar(): void

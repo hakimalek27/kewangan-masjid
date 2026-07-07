@@ -48,7 +48,7 @@ class LanjutanTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -56,7 +56,7 @@ class LanjutanTest extends TestCase
         $this->bendahari = $buat('bendahari');
         $this->pengerusi = $buat('pengerusi');
         $this->bank = BankAccount::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('status', 'AKTIF')->firstOrFail();
     }
 
@@ -184,7 +184,7 @@ class LanjutanTest extends TestCase
             ->assertRedirect(route('belanjawan.index', ['tahun' => $tahun]));
 
         $this->assertDatabaseHas('budget', [
-            'masjid_id' => config('sppkms.masjid_id'), 'tahun' => $tahun,
+            'masjid_id' => config('spkm.masjid_id'), 'tahun' => $tahun,
             'coa_id' => $coaId, 'amaun_peruntukan' => '1000.00',
         ]);
 
@@ -222,7 +222,7 @@ class LanjutanTest extends TestCase
             ->assertRedirect(route('belanja.senarai'));
 
         $approval = Approval::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('status', 'PENDING')->where('amaun', '150.00')
             ->orderByDesc('id')->first();
         $this->assertNotNull($approval, 'Approval PENDING mesti tercipta');
@@ -276,7 +276,7 @@ class LanjutanTest extends TestCase
         ])->assertRedirect(route('belanja.senarai'));
 
         $approval = Approval::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('status', 'PENDING')->where('amaun', '250.00')->orderByDesc('id')->firstOrFail();
 
         $payload = json_decode((string) $approval->payload, true);
@@ -296,7 +296,7 @@ class LanjutanTest extends TestCase
         $this->assertCount(1, $att, 'Lampiran mesti dipautkan kpd pembayaran selepas lulus');
         $this->assertSame($stash, $att->first()->file_path);
         $this->assertSame('invois.pdf', $att->first()->file_name);
-        $this->assertSame((int) config('sppkms.masjid_id'), (int) $att->first()->masjid_id);
+        $this->assertSame((int) config('spkm.masjid_id'), (int) $att->first()->masjid_id);
         Storage::disk('local')->assertExists($stash); // fail kekal
     }
 
@@ -315,7 +315,7 @@ class LanjutanTest extends TestCase
         ])->assertRedirect(route('belanja.senarai'));
 
         $approval = Approval::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('status', 'PENDING')->where('amaun', '300.00')->orderByDesc('id')->firstOrFail();
         $stash = json_decode((string) $approval->payload, true)['_lampiran'][0]['file_path'];
         Storage::disk('local')->assertExists($stash);
@@ -347,7 +347,7 @@ class LanjutanTest extends TestCase
             Pembayaran::withoutMasjidScope()->where('pemohon', 'UJIAN SUIS MATI')->exists(),
             'Bila suis mati, bayaran terus direkod tanpa kelulusan',
         );
-        $this->assertSame(0, Approval::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))
+        $this->assertSame(0, Approval::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))
             ->where('status', 'PENDING')->where('amaun', '500.00')->count());
     }
 
@@ -410,12 +410,12 @@ class LanjutanTest extends TestCase
             'file_path' => 'lampiran/dipakai.pdf', 'file_name' => 'dipakai.pdf',
         ]);
         Approval::withoutMasjidScope()->create([
-            'masjid_id' => config('sppkms.masjid_id'), 'entity' => 'BAYARAN', 'entity_id' => null,
+            'masjid_id' => config('spkm.masjid_id'), 'entity' => 'BAYARAN', 'entity_id' => null,
             'amaun' => '10.00', 'status' => 'PENDING', 'remark' => 'UJIAN SAPU',
             'payload' => json_encode(['_jenis' => 'BAYARAN', '_lampiran' => [['file_path' => 'lampiran/pending.pdf']]]),
         ]);
 
-        $this->artisan('sppkms:sapu-lampiran', ['--hari' => 0])->assertSuccessful();
+        $this->artisan('spkm:sapu-lampiran', ['--hari' => 0])->assertSuccessful();
 
         $disk->assertMissing('lampiran/yatim.pdf');  // yatim dibuang
         $disk->assertExists('lampiran/dipakai.pdf'); // dirujuk Attachment dikekalkan
@@ -478,7 +478,7 @@ class LanjutanTest extends TestCase
 
         // fund_account di-seed automatik untuk 300-04010..04050
         $this->assertDatabaseHas('fund_account', [
-            'masjid_id' => config('sppkms.masjid_id'),
+            'masjid_id' => config('spkm.masjid_id'),
             'coa_id'    => $this->coaId('300-04050'),
         ]);
     }

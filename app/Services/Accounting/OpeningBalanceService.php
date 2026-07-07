@@ -75,7 +75,7 @@ class OpeningBalanceService
             }
 
             // Baris pengimbang → 100-10000 Dana Terkumpul
-            $dana = $this->journal->coaByKod(config('sppkms.coa.dana_terkumpul'), $masjidId);
+            $dana = $this->journal->coaByKod(config('spkm.coa.dana_terkumpul'), $masjidId);
             if (bccomp($netDr, '0', 2) > 0) {
                 $lines[] = ['coa_id' => $dana->id, 'debit' => 0, 'kredit' => $netDr, 'memo' => "Dana terkumpul (baki awal {$tahun})"];
             } elseif (bccomp($netDr, '0', 2) < 0) {

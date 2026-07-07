@@ -24,7 +24,7 @@ class JurnalTunaiGuardTest extends TestCase
     private function bendahari(): AppUser
     {
         return AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'jg_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'jg_'.uniqid(),
             'nama_penuh' => 'Bendahari', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

@@ -8,7 +8,7 @@
     @endif
     @if (session('audit_output'))
         <div class="card shadow-sm mb-4">
-            <div class="card-header fw-bold">{{ __('Output Pengesahan Rantai (sppkms:verify-audit-chain)') }}</div>
+            <div class="card-header fw-bold">{{ __('Output Pengesahan Rantai (spkm:verify-audit-chain)') }}</div>
             <div class="card-body"><pre class="mb-0 small">{{ session('audit_output') }}</pre></div>
         </div>
     @endif

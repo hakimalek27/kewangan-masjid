@@ -12,7 +12,7 @@ use Illuminate\View\View;
 
 /**
  * Jejak audit hash-chain (Fasa 7) — boleh tapis, papar before/after JSON,
- * dan sahkan keutuhan rantai (sppkms:verify-audit-chain) terus dari UI.
+ * dan sahkan keutuhan rantai (spkm:verify-audit-chain) terus dari UI.
  */
 class AuditController extends Controller
 {
@@ -39,7 +39,7 @@ class AuditController extends Controller
     /** Butang "Sahkan Rantai" — jalankan verify-audit-chain, papar output. */
     public function sahkan(): RedirectResponse
     {
-        $exit = Artisan::call('sppkms:verify-audit-chain');
+        $exit = Artisan::call('spkm:verify-audit-chain');
         $output = trim(Artisan::output());
 
         return redirect()->route('admin.audit')

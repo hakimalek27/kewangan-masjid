@@ -23,7 +23,7 @@ class LocaleTest extends TestCase
         parent::setUp();
         $this->aktifkanKonteksMasjid();
         $this->pengguna = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_lang_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_lang_'.uniqid(),
             'nama_penuh' => 'Pengguna', 'role' => 'admin',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

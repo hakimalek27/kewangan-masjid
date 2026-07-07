@@ -26,7 +26,7 @@ class LaporanHttpTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_laporan_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_laporan_'.uniqid(),
             'nama_penuh' => 'Ujian Laporan', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

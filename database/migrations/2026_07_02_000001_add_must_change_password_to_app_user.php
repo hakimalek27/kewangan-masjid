@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Paksa tukar kata laluan pada login pertama (kredensial lalai/reset).
- * Digunakan oleh command sppkms:reset-default-passwords + middleware PaksaTukarKataLaluan.
+ * Digunakan oleh command spkm:reset-default-passwords + middleware PaksaTukarKataLaluan.
  */
 return new class extends Migration
 {

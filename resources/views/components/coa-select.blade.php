@@ -10,7 +10,7 @@
 ])
 
 @php
-    $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('sppkms.masjid_id');
+    $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('spkm.masjid_id');
 
     $q = \App\Models\Coa::withoutMasjidScope()
         ->where('masjid_id', $masjidId)

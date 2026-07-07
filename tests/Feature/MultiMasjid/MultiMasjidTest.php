@@ -32,7 +32,7 @@ class MultiMasjidTest extends TestCase
         parent::setUp();
         $this->aktifkanKonteksMasjid();
 
-        $this->home = (int) config('sppkms.masjid_id');
+        $this->home = (int) config('spkm.masjid_id');
         $this->masjidLain = (int) Masjid::create(['nama' => 'Masjid Lain '.uniqid()])->id;
 
         $this->admin = $this->buatUser('admin');

@@ -62,7 +62,7 @@ class RunDailyDbDump implements ShouldQueue
     private function jalankanDump(): string
     {
         $db = config('database.connections.'.config('database.default'));
-        $bin = (string) config('sppkms.mysqldump_path', 'mysqldump');
+        $bin = (string) config('spkm.mysqldump_path', 'mysqldump');
 
         $arahan = [
             $bin,

@@ -26,7 +26,7 @@ class TetapanHttpTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -75,7 +75,7 @@ class TetapanHttpTest extends TestCase
         ])->assertRedirect(route('tetapan.mapping'));
 
         $this->assertDatabaseHas('coa_local_mapping', [
-            'masjid_id'   => config('sppkms.masjid_id'),
+            'masjid_id'   => config('spkm.masjid_id'),
             'local_label' => 'UJIAN LABEL TETAPAN',
             'jenis_guna'  => 'kedua',
             'coa_id'      => $this->coaId('600-10050'),

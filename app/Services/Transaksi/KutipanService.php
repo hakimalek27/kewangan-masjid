@@ -176,11 +176,11 @@ class KutipanService
     private function tentukanDrCoa(array $data): int
     {
         if (($data['kaedah'] ?? '') === 'TUNAI' && empty($data['bank_account_id'])) {
-            return $this->journal->coaByKod(config('sppkms.coa.tunai_di_tangan'))->id;
+            return $this->journal->coaByKod(config('spkm.coa.tunai_di_tangan'))->id;
         }
 
         // Skop-diri kepada masjid semasa (jangan bergantung kpd skop global sahaja).
-        $masjidId = app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('sppkms.masjid_id');
+        $masjidId = app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('spkm.masjid_id');
         $bank = \App\Models\BankAccount::withoutMasjidScope()
             ->where('masjid_id', $masjidId)
             ->findOrFail($data['bank_account_id'] ?? 0);

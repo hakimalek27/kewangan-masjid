@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  */
 class ResetDefaultPasswords extends Command
 {
-    protected $signature = 'sppkms:reset-default-passwords {logins?* : Senarai login (lalai: admin, malmutaqqin)}';
+    protected $signature = 'spkm:reset-default-passwords {logins?* : Senarai login (lalai: admin, malmutaqqin)}';
     protected $description = 'Set kata laluan rawak + paksa tukar untuk akaun benih lalai';
 
     public function handle(): int

@@ -1,7 +1,7 @@
 @props(['name' => 'bank_account_id', 'required' => false, 'label' => 'Bank', 'selected' => null])
 
 @php
-    $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('sppkms.masjid_id');
+    $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('spkm.masjid_id');
     $banks = \App\Models\BankAccount::withoutMasjidScope()
         ->where('masjid_id', $masjidId)->where('status', 'AKTIF')
         ->orderBy('slot')->get();

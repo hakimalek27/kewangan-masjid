@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class VerifyAuditChain extends Command
 {
-    protected $signature = 'sppkms:verify-audit-chain';
+    protected $signature = 'spkm:verify-audit-chain';
     protected $description = 'Sahkan hash-chain jejak audit — kesan jika ada baris diubah/dipadam';
 
     public function handle(): int

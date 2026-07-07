@@ -63,7 +63,7 @@ class AsetService
     private function sntUntukCoa(int $coaId): ?int
     {
         // Skop-diri kepada masjid semasa supaya coaId asing tidak boleh derive SNT silang-masjid.
-        $masjidId = app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('sppkms.masjid_id');
+        $masjidId = app()->bound('current.masjid_id') ? (int) app('current.masjid_id') : (int) config('spkm.masjid_id');
         $coa = Coa::withoutMasjidScope()->where('masjid_id', $masjidId)->find($coaId);
         if (!$coa) {
             return null;

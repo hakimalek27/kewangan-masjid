@@ -25,7 +25,7 @@ class PenyataBankTest extends TestCase
 
     public function test_penyata_ikut_bank_tapis_per_akaun(): void
     {
-        $mid = config('sppkms.masjid_id');
+        $mid = config('spkm.masjid_id');
         $bankA = BankAccount::withoutMasjidScope()->where('masjid_id', $mid)->firstOrFail();
 
         $bankB = BankAccount::withoutMasjidScope()->create([
@@ -77,7 +77,7 @@ class PenyataBankTest extends TestCase
      */
     public function test_penyata_ikut_bank_seimbang_walau_ada_rekupmen(): void
     {
-        $mid = config('sppkms.masjid_id');
+        $mid = config('spkm.masjid_id');
         $bankA = BankAccount::withoutMasjidScope()->where('masjid_id', $mid)
             ->where('coa_id', $this->coaId('250-05010'))->firstOrFail();
 

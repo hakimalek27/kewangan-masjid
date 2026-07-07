@@ -81,8 +81,8 @@ class MasjidController extends Controller
                 // Lemparkan supaya transaksi gulung balik (jangan commit masjid yatim).
                 if ($bilCoa < 1) {
                     throw new \RuntimeException(
-                        'Templat COA kosong atau tidak dijumpai (SPPKMS_MASJID_ID='.
-                        (int) config('sppkms.masjid_id').'). Masjid tidak dicipta.'
+                        'Templat COA kosong atau tidak dijumpai (SPKM_MASJID_ID='.
+                        (int) config('spkm.masjid_id').'). Masjid tidak dicipta.'
                     );
                 }
 
@@ -90,7 +90,7 @@ class MasjidController extends Controller
                 $this->audit->log('CREATE', 'masjid', null, ['nama' => $masjid->nama], $masjid->id, null, $masjid->id);
                 $this->audit->log('CREATE', 'app_user', null,
                     ['login' => $user->login, 'role' => 'bendahari'], $user->id, null, $masjid->id);
-                $this->audit->log('CREATE', 'coa', null, ['disemai' => $bilCoa, 'templat' => (int) config('sppkms.masjid_id')], null, null, $masjid->id);
+                $this->audit->log('CREATE', 'coa', null, ['disemai' => $bilCoa, 'templat' => (int) config('spkm.masjid_id')], null, null, $masjid->id);
 
                 return ['masjid' => $masjid, 'user' => $user, 'coa' => $bilCoa];
             });
@@ -124,8 +124,8 @@ class MasjidController extends Controller
         }
 
         return back()->with('error',
-            'Templat COA kosong atau tidak dijumpai (SPPKMS_MASJID_ID='.
-            (int) config('sppkms.masjid_id').'). Tiada akaun disemai — sila semak konfigurasi.');
+            'Templat COA kosong atau tidak dijumpai (SPKM_MASJID_ID='.
+            (int) config('spkm.masjid_id').'). Tiada akaun disemai — sila semak konfigurasi.');
     }
 
     public function kemaskini(MasjidRequest $request): RedirectResponse

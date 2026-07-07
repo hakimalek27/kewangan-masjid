@@ -11,7 +11,7 @@ class VerifyCompletenessTest extends TestCase
 
     public function test_command_jalan_dan_lapor_advisory(): void
     {
-        $this->artisan('sppkms:verify-completeness')
+        $this->artisan('spkm:verify-completeness')
             ->assertSuccessful() // advisory — sentiasa exit 0
             ->expectsOutputToContain('KUTIPAN')
             ->expectsOutputToContain('nama_pemberi')

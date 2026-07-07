@@ -14,7 +14,7 @@ class CoaTemplateService
 {
     public function sediaUntukMasjid(int $targetMasjidId, ?int $templateMasjidId = null): int
     {
-        $templateMasjidId ??= (int) config('sppkms.masjid_id');
+        $templateMasjidId ??= (int) config('spkm.masjid_id');
 
         if ($targetMasjidId === $templateMasjidId) {
             return 0;

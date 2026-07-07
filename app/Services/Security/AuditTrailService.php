@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
  * Jejak audit append-only dengan hash-chain:
  * row_hash = sha256(prev_hash | masjid | user | action | entity | entity_id | before | after | masa)
  * Sebarang pengubahan/pemadaman baris lama memutuskan rantai — dikesan oleh
- * command sppkms:verify-audit-chain.
+ * command spkm:verify-audit-chain.
  */
 class AuditTrailService
 {

@@ -33,7 +33,7 @@ class PenggunaScopeTest extends TestCase
     {
         parent::setUp();
         $this->aktifkanKonteksMasjid();
-        $this->home = (int) config('sppkms.masjid_id');
+        $this->home = (int) config('spkm.masjid_id');
         $this->masjidB = (int) Masjid::create(['nama' => 'Masjid B '.uniqid()])->id;
 
         $this->bendahari = $this->buat('bendahari', $this->home);

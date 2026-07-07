@@ -30,13 +30,13 @@ class CetakResitBaucerTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_cetak_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_cetak_'.uniqid(),
             'nama_penuh' => 'Ujian Cetak', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
         $this->bank = BankAccount::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))->firstOrFail();
-        $this->namaMasjid = Masjid::find((int) config('sppkms.masjid_id'))->nama;
+            ->where('masjid_id', config('spkm.masjid_id'))->firstOrFail();
+        $this->namaMasjid = Masjid::find((int) config('spkm.masjid_id'))->nama;
     }
 
     private function buatKutipan(string $noResit = 'UJI-CETAK-1'): Kutipan

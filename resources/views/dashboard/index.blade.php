@@ -49,7 +49,7 @@
             <div class="card border-start border-info border-4 shadow-sm h-100">
                 <div class="card-body">
                     <div class="text-info text-uppercase small fw-bold"><i class="bi bi-megaphone me-1"></i>{{ __('Pengumuman') }}</div>
-                    <div class="fw-bold mb-1">{{ __('Selamat datang ke SPAKM') }}</div>
+                    <div class="fw-bold mb-1">{{ __('Selamat datang ke SPKM') }}</div>
                     <div class="small text-muted">
                         {{ __('Sila rujuk') }} <strong>{{ __('Panduan Kewangan') }}</strong> {{ __('(menu profil di penjuru atas kanan) untuk bantuan.') }}
                     </div>

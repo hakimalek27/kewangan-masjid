@@ -22,7 +22,7 @@ class SmokeSemuaHalamanTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $admin = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'smoke_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'smoke_'.uniqid(),
             'nama_penuh' => 'Smoke Admin', 'role' => 'admin',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

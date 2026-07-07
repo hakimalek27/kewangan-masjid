@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class VerifyBalance extends Command
 {
-    protected $signature = 'sppkms:verify-balance';
+    protected $signature = 'spkm:verify-balance';
     protected $description = 'Semak setiap voucher jurnal: Σdebit mesti = Σkredit (integriti double-entry)';
 
     public function handle(): int

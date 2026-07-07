@@ -365,6 +365,6 @@ class SppkmsDualWriteService
 
     private function url(string $path): string
     {
-        return rtrim((string) config('sppkms.legacy_url'), '/').'/'.$path;
+        return rtrim((string) config('spkm.legacy_url'), '/').'/'.$path;
     }
 }

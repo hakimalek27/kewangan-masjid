@@ -32,7 +32,7 @@ class SchemaSmokeTest extends TestCase
     {
         // 129 COA seed asal + 600-15030 LAIN-LAIN PENGURUSAN JENAZAH (dicipta semasa
         // re-point entri warisan header-COA — audit C8) = 130.
-        app()->instance('current.masjid_id', config('sppkms.masjid_id'));
+        app()->instance('current.masjid_id', config('spkm.masjid_id'));
         $this->assertSame(130, Coa::count());
     }
 

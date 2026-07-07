@@ -21,7 +21,7 @@ class Masjid extends Model
     {
         $id = app()->bound('current.masjid_id')
             ? (int) app('current.masjid_id')
-            : (int) config('sppkms.masjid_id');
+            : (int) config('spkm.masjid_id');
 
         $key = 'masjid.semasa#'.$id;
         if (app()->bound($key)) {
@@ -44,7 +44,7 @@ class Masjid extends Model
     {
         $id = app()->bound('current.masjid_id')
             ? (int) app('current.masjid_id')
-            : (int) config('sppkms.masjid_id');
+            : (int) config('spkm.masjid_id');
 
         app()->forgetInstance('masjid.semasa#'.$id);
     }

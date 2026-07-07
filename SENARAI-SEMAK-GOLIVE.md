@@ -1,4 +1,4 @@
-# SENARAI SEMAK GO-LIVE — SPAKM
+# SENARAI SEMAK GO-LIVE — SPKM
 
 Ikut turutan ini sebelum sistem digunakan sebenar.
 
@@ -11,7 +11,7 @@ Ikut turutan ini sebelum sistem digunakan sebenar.
 - [ ] `php artisan config:cache route:cache view:cache` selepas set config.
 
 ## 2. Kredensial & akaun
-- [ ] Jalankan `php artisan sppkms:reset-default-passwords` (set kata laluan rawak + paksa tukar) ATAU tukar manual kata laluan `admin` & `malmutaqqin`.
+- [ ] Jalankan `php artisan spkm:reset-default-passwords` (set kata laluan rawak + paksa tukar) ATAU tukar manual kata laluan `admin` & `malmutaqqin`.
 - [ ] Sahkan tiada akaun ujian aktif (`test` sudah dibuang).
 - [ ] Log masuk pertama setiap pengguna → dipaksa tukar kata laluan.
 
@@ -26,8 +26,8 @@ Ikut turutan ini sebelum sistem digunakan sebenar.
 - [ ] Worker queue berjalan: `php artisan queue:work` (queue: default, ai, webhook, sync).
 
 ## 5. Pengesahan akhir
-- [ ] `php artisan sppkms:verify-balance` → semua voucher seimbang.
-- [ ] `php artisan sppkms:verify-audit-chain` → rantai utuh.
+- [ ] `php artisan spkm:verify-balance` → semua voucher seimbang.
+- [ ] `php artisan spkm:verify-audit-chain` → rantai utuh.
 - [ ] `php artisan test` → semua LULUS.
 - [ ] Backup pertama berjaya + `ujiPulih` (restore-test) lulus.
 

@@ -38,7 +38,7 @@ class DualWriteTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bank = BankAccount::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->firstOrFail();
 
         // Kredensial SPPKMS dalam vault + rujukan dalam app_setting
@@ -83,7 +83,7 @@ class DualWriteTest extends TestCase
     private function syncUntuk(Kutipan $k): SppkmsSync
     {
         return SppkmsSync::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('source_type', 'KUTIPAN')
             ->where('source_id', $k->id)
             ->firstOrFail();
@@ -102,7 +102,7 @@ class DualWriteTest extends TestCase
         $k = $this->ciptaKutipan('UJI-DW0');
 
         $this->assertDatabaseMissing('sppkms_sync', [
-            'masjid_id'   => config('sppkms.masjid_id'),
+            'masjid_id'   => config('spkm.masjid_id'),
             'source_type' => 'KUTIPAN',
             'source_id'   => $k->id,
         ]);
@@ -122,7 +122,7 @@ class DualWriteTest extends TestCase
         $k = $this->ciptaKutipan('UJI-DW1');
 
         $this->assertDatabaseHas('sppkms_sync', [
-            'masjid_id'   => config('sppkms.masjid_id'),
+            'masjid_id'   => config('spkm.masjid_id'),
             'source_type' => 'KUTIPAN',
             'source_id'   => $k->id,
             'status'      => 'PENDING',
@@ -280,7 +280,7 @@ class DualWriteTest extends TestCase
         ]);
 
         $this->assertDatabaseHas('sppkms_sync', [
-            'masjid_id'   => config('sppkms.masjid_id'),
+            'masjid_id'   => config('spkm.masjid_id'),
             'source_type' => 'BAYARAN',
             'source_id'   => $p->id,
             'status'      => 'SKIPPED',
@@ -298,7 +298,7 @@ class DualWriteTest extends TestCase
         Http::fake();
 
         $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_dw_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_dw_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

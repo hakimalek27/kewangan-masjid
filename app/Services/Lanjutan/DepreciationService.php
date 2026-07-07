@@ -61,7 +61,7 @@ class DepreciationService
     public function janaBulan(int $tahun, int $bulan, ?int $masjidId = null): array
     {
         $masjidId ??= app('current.masjid_id');
-        $coaSusut = $this->journal->coaByKod(config('sppkms.coa.susut_nilai'), $masjidId);
+        $coaSusut = $this->journal->coaByKod(config('spkm.coa.susut_nilai'), $masjidId);
         $periodYm = sprintf('%04d-%02d', $tahun, $bulan);
         $tarikh   = Carbon::create($tahun, $bulan, 1)->endOfMonth()->toDateString();
 

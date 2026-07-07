@@ -14,7 +14,7 @@ use Throwable;
  */
 class UjiPulihBackup extends Command
 {
-    protected $signature = 'sppkms:uji-pulih-backup';
+    protected $signature = 'spkm:uji-pulih-backup';
     protected $description = 'Uji-pulih (restore-test) backup terkini setiap masjid dari Google Drive';
 
     public function handle(GoogleDriveBackupService $service): int

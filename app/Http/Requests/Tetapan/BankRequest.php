@@ -10,7 +10,7 @@ class BankRequest extends BaseFormRequest
 {
     public function rules(): array
     {
-        $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('sppkms.masjid_id');
+        $masjidId = app()->bound('current.masjid_id') ? app('current.masjid_id') : config('spkm.masjid_id');
         $bankId = $this->route('bank')?->id;
 
         return [

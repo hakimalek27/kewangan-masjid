@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  */
 class VerifyCompleteness extends Command
 {
-    protected $signature = 'sppkms:verify-completeness';
+    protected $signature = 'spkm:verify-completeness';
     protected $description = 'Lapor kelengkapan medan kebolehkesanan (nama pemberi/saksi/tar bank-in/pemohon/no cek) — advisory';
 
     public function handle(): int

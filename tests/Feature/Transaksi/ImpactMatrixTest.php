@@ -37,7 +37,7 @@ class ImpactMatrixTest extends TestCase
         $this->pembayaran = app(PembayaranService::class);
         $this->jurnal = app(BelanjaJurnalService::class);
         $this->fd = app(FdService::class);
-        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))->firstOrFail();
+        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))->firstOrFail();
     }
 
     /** Snapshot metrik audit — dikira terus dari jurnal (POSTED sahaja), seperti laporan. */
@@ -47,7 +47,7 @@ class ImpactMatrixTest extends TestCase
             ->join('journal_voucher as jv', 'jv.id', '=', 'je.voucher_id')
             ->join('coa as c', 'c.id', '=', 'je.coa_id')
             ->where('jv.status', 'POSTED')
-            ->where('jv.masjid_id', config('sppkms.masjid_id'));
+            ->where('jv.masjid_id', config('spkm.masjid_id'));
 
         // Jumlah Imbangan Duga = Σ baki sebelah debit (= Σ sebelah kredit)
         $tb = DB::selectOne('
@@ -57,7 +57,7 @@ class ImpactMatrixTest extends TestCase
                 JOIN journal_voucher jv ON jv.id = je.voucher_id
                 WHERE jv.status="POSTED" AND jv.masjid_id = ?
                 GROUP BY je.coa_id
-            ) x', [config('sppkms.masjid_id')])->total;
+            ) x', [config('spkm.masjid_id')])->total;
 
         return [
             'bank'    => $this->bakiCoa('250-05010'),
@@ -289,20 +289,20 @@ class ImpactMatrixTest extends TestCase
     // ============ Nombor auto vs manual ============
     public function test_nombor_manual_tidak_menambah_kaunter(): void
     {
-        $noSebelum = DB::table('number_sequence')->where('masjid_id', config('sppkms.masjid_id'))->where('jenis', 'RESIT')->value('next_no');
+        $noSebelum = DB::table('number_sequence')->where('masjid_id', config('spkm.masjid_id'))->where('jenis', 'RESIT')->value('next_no');
 
         $this->kutipan->create([
             'tarikh' => '2026-06-12', 'coa_id' => $this->coaId('400-03010'),
             'kaedah' => 'TUNAI', 'jumlah' => '1.00', 'no_resit' => 'MANUAL-99',
         ]);
 
-        $noSelepas = DB::table('number_sequence')->where('masjid_id', config('sppkms.masjid_id'))->where('jenis', 'RESIT')->value('next_no');
+        $noSelepas = DB::table('number_sequence')->where('masjid_id', config('spkm.masjid_id'))->where('jenis', 'RESIT')->value('next_no');
         $this->assertSame($noSebelum, $noSelepas, 'Kaunter RESIT tidak patut berubah untuk nombor manual');
     }
 
     public function test_nombor_auto_menambah_kaunter(): void
     {
-        $noSebelum = (int) DB::table('number_sequence')->where('masjid_id', config('sppkms.masjid_id'))->where('jenis', 'RESIT')->value('next_no');
+        $noSebelum = (int) DB::table('number_sequence')->where('masjid_id', config('spkm.masjid_id'))->where('jenis', 'RESIT')->value('next_no');
 
         $k = $this->kutipan->create([
             'tarikh' => '2026-06-12', 'coa_id' => $this->coaId('400-03010'),
@@ -310,6 +310,6 @@ class ImpactMatrixTest extends TestCase
         ]);
 
         $this->assertSame(str_pad((string) $noSebelum, 4, '0', STR_PAD_LEFT), $k->no_resit);
-        $this->assertSame($noSebelum + 1, (int) DB::table('number_sequence')->where('masjid_id', config('sppkms.masjid_id'))->where('jenis', 'RESIT')->value('next_no'));
+        $this->assertSame($noSebelum + 1, (int) DB::table('number_sequence')->where('masjid_id', config('spkm.masjid_id'))->where('jenis', 'RESIT')->value('next_no'));
     }
 }

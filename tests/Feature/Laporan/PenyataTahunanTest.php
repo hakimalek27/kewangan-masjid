@@ -53,7 +53,7 @@ class PenyataTahunanTest extends TestCase
     public function test_halaman_penyata_tahunan_format_baharu(): void
     {
         $viewer = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_pt_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_pt_'.uniqid(),
             'nama_penuh' => 'Ujian PT', 'role' => 'viewer',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

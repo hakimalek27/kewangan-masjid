@@ -25,7 +25,7 @@ class RoleLandingTest extends TestCase
     private function buat(string $role): AppUser
     {
         return AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'land_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'land_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Uji '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);

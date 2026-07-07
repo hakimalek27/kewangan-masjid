@@ -42,7 +42,7 @@ class DualWriteController extends Controller
 
         return view('admin.dualwrite', [
             'aktif'        => Setting::isOn('dual_write_sppkms'),
-            'legacyUrl'    => config('sppkms.legacy_url'),
+            'legacyUrl'    => config('spkm.legacy_url'),
             'loginMasked'  => $loginRef ? $this->vault->masked($loginRef) : null,
             'adaPassword'  => (bool) Setting::get('sppkms_password_ref'),
             'statistik'    => $statistik,

@@ -29,11 +29,11 @@ class LampiranTest extends TestCase
         parent::setUp();
         $this->aktifkanKonteksMasjid();
         $this->bendahari = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_lamp_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_lamp_'.uniqid(),
             'nama_penuh' => 'Bendahari', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
-        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))->firstOrFail();
+        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))->firstOrFail();
     }
 
     public function test_lampiran_disimpan_private_bukan_awam(): void
@@ -70,13 +70,13 @@ class LampiranTest extends TestCase
     {
         // Cipta pembayaran + lampiran private
         $p = Pembayaran::withoutMasjidScope()->create([
-            'masjid_id' => config('sppkms.masjid_id'), 'jenis' => 'BAYARAN',
+            'masjid_id' => config('spkm.masjid_id'), 'jenis' => 'BAYARAN',
             'tar_lulus' => '2026-06-12', 'period_ym' => '2026-06', 'coa_id' => $this->coaId('600-06000'),
             'jumlah' => '1.00', 'cara_bayar' => 'EFT', 'baucer_no' => 'LAMP-3', 'status' => 'ACTIVE',
         ]);
         Storage::disk('local')->put('lampiran/rahsia.pdf', '%PDF-test');
         $att = Attachment::withoutMasjidScope()->create([
-            'masjid_id' => config('sppkms.masjid_id'), 'owner_type' => 'BAYARAN', 'owner_id' => $p->id,
+            'masjid_id' => config('spkm.masjid_id'), 'owner_type' => 'BAYARAN', 'owner_id' => $p->id,
             'file_path' => 'lampiran/rahsia.pdf', 'file_name' => 'rahsia.pdf', 'mime' => 'application/pdf',
         ]);
 

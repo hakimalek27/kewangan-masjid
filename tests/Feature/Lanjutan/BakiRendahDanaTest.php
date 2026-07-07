@@ -28,7 +28,7 @@ class BakiRendahDanaTest extends TestCase
         Http::fake(); // sekat Telegram sebenar
 
         $this->bendahari = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_br_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_br_'.uniqid(),
             'nama_penuh' => 'Bendahari', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -59,7 +59,7 @@ class BakiRendahDanaTest extends TestCase
         $this->assertSame(0, $svc->semakSemua(), 'Kali kedua hari sama tidak patut log lagi');
 
         $this->assertSame(1, ErrorLog::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('message', 'like', 'Baki bank rendah%')
             ->whereDate('created_at', now()->toDateString())
             ->count());

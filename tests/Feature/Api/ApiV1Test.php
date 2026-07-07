@@ -37,7 +37,7 @@ class ApiV1Test extends TestCase
     private function buatKlien(string $scopes, string $secret, int $rateLimit = 1000): ApiClient
     {
         return ApiClient::create([
-            'masjid_id'          => config('sppkms.masjid_id'),
+            'masjid_id'          => config('spkm.masjid_id'),
             'name'               => 'Ujian API '.uniqid(),
             'client_key'         => bin2hex(random_bytes(16)),
             'secret_hash'        => Hash::make($secret),

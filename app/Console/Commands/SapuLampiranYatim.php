@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class SapuLampiranYatim extends Command
 {
-    protected $signature = 'sppkms:sapu-lampiran {--hari=7 : Umur minimum fail (hari) sebelum layak dibuang} {--dry-run : Senarai sahaja, jangan padam}';
+    protected $signature = 'spkm:sapu-lampiran {--hari=7 : Umur minimum fail (hari) sebelum layak dibuang} {--dry-run : Senarai sahaja, jangan padam}';
 
     protected $description = 'Padam fail lampiran yatim (tiada Attachment & bukan permohonan PENDING) di storan peribadi';
 

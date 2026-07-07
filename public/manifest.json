@@ -1,6 +1,6 @@
 {
-    "name": "SPAKM — Sistem Pengurusan & Audit Kewangan Masjid",
-    "short_name": "SPAKM",
+    "name": "SPKM — Sistem Pengurusan Kewangan Masjid",
+    "short_name": "SPKM",
     "description": "Sistem kewangan masjid dengan perakaunan double-entry dan jejak audit penuh.",
     "start_url": "/dashboard",
     "scope": "/",

@@ -16,19 +16,19 @@
 <script>
     (function () {
         try {
-            if (localStorage.getItem('spakm-theme') === 'dark') document.body.classList.add('dark-mode');
-            var f = localStorage.getItem('spakm-font');
+            if (localStorage.getItem('spkm-theme') === 'dark') document.body.classList.add('dark-mode');
+            var f = localStorage.getItem('spkm-font');
             if (f === 'sm' || f === 'lg') document.body.classList.add('font-' + f);
         } catch (e) {}
     })();
-    function spakmToggleTheme() {
+    function spkmToggleTheme() {
         var gelap = document.body.classList.toggle('dark-mode');
-        try { localStorage.setItem('spakm-theme', gelap ? 'dark' : 'light'); } catch (e) {}
+        try { localStorage.setItem('spkm-theme', gelap ? 'dark' : 'light'); } catch (e) {}
     }
-    function spakmFont(saiz) {
+    function spkmFont(saiz) {
         document.body.classList.remove('font-sm', 'font-lg');
         if (saiz === 'sm' || saiz === 'lg') document.body.classList.add('font-' + saiz);
-        try { localStorage.setItem('spakm-font', saiz); } catch (e) {}
+        try { localStorage.setItem('spkm-font', saiz); } catch (e) {}
     }
 </script>
 
@@ -83,7 +83,7 @@
                 // Item aras-masjid disembunyi daripada admin (dlm kumpulan sistem yg dikongsi).
                 $sembunyiDariAdmin = ['dashboard', 'draf.index', 'tetapan.wizard', 'tetapan.resit', 'tetapan.mapping', 'tetapan.semak', 'tetapan.masjid'];
             @endphp
-            @foreach (config('sppkms.menu') as $i => $group)
+            @foreach (config('spkm.menu') as $i => $group)
                 @php
                     // Admin: langkau kumpulan KEWANGAN MASJID sepenuhnya (papar sistem sahaja).
                     $langkauAdmin = $peranan === 'admin' && ! in_array($group['label'] ?? '', $kumpulanSistem, true);
@@ -166,13 +166,13 @@
             <div class="ms-auto d-flex align-items-center gap-1">
                 {{-- Fasa 9 UX — saiz font A- / A / A+ --}}
                 <div class="btn-group btn-group-sm d-none d-md-inline-flex" role="group" aria-label="{{ __('Saiz font') }}">
-                    <button type="button" class="btn btn-outline-secondary" onclick="spakmFont('sm')" title="{{ __('Font kecil') }}">A-</button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="spakmFont('')" title="{{ __('Font biasa') }}">A</button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="spakmFont('lg')" title="{{ __('Font besar') }}">A+</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="spkmFont('sm')" title="{{ __('Font kecil') }}">A-</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="spkmFont('')" title="{{ __('Font biasa') }}">A</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="spkmFont('lg')" title="{{ __('Font besar') }}">A+</button>
                 </div>
 
                 {{-- Fasa 9 UX — mod gelap --}}
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="spakmToggleTheme()" title="{{ __('Mod gelap / cerah') }}">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="spkmToggleTheme()" title="{{ __('Mod gelap / cerah') }}">
                     <i class="bi bi-moon-stars"></i>
                 </button>
 

@@ -10,7 +10,7 @@ class AppUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $masjidId = config('sppkms.masjid_id');
+        $masjidId = config('spkm.masjid_id');
 
         $users = [
             ['login' => 'admin',       'nama_penuh' => 'Admin Sistem',           'role' => 'admin',     'password' => 'admin12345'],

@@ -28,14 +28,14 @@ class WebhookEventTest extends TestCase
     {
         parent::setUp();
         $this->aktifkanKonteksMasjid();
-        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('sppkms.masjid_id'))->firstOrFail();
+        $this->bank = BankAccount::withoutMasjidScope()->where('masjid_id', config('spkm.masjid_id'))->firstOrFail();
         Queue::fake(); // pintas SendWebhook & semua job lain
     }
 
     private function langgan(string $event): void
     {
         WebhookSubscription::create([
-            'masjid_id' => config('sppkms.masjid_id'),
+            'masjid_id' => config('spkm.masjid_id'),
             'client_id' => null,
             'event' => $event,
             'target_url' => 'https://contoh.test/hook',

@@ -26,7 +26,7 @@ class ProfitLossTutupTahunTest extends TestCase
 
     public function test_profitloss_merentas_tahun_kecualikan_period_13_dan_00(): void
     {
-        $mid = config('sppkms.masjid_id');
+        $mid = config('spkm.masjid_id');
         $js = app(JournalService::class);
         $rs = app(ReportService::class);
 

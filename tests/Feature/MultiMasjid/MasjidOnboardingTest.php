@@ -31,7 +31,7 @@ class MasjidOnboardingTest extends TestCase
     private function buatUser(string $role): AppUser
     {
         return AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Uji '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -56,7 +56,7 @@ class MasjidOnboardingTest extends TestCase
         $this->assertSame([(int) $masjid->id], $bdh->accessibleMasjidIds());
 
         // COA standard disemai → masjid baharu terus boleh berfungsi (bilangan sama dgn templat)
-        $bilTemplat = (int) DB::table('coa')->where('masjid_id', config('sppkms.masjid_id'))->count();
+        $bilTemplat = (int) DB::table('coa')->where('masjid_id', config('spkm.masjid_id'))->count();
         $bilBaharu = (int) DB::table('coa')->where('masjid_id', $masjid->id)->count();
         $this->assertGreaterThan(0, $bilBaharu, 'Masjid baharu mesti dapat COA standard');
         $this->assertSame($bilTemplat, $bilBaharu, 'COA masjid baharu mesti sama bilangan dgn templat');
@@ -89,7 +89,7 @@ class MasjidOnboardingTest extends TestCase
     {
         // Templat COA tunjuk ke masjid TANPA COA → semaian 0 → SELURUH transaksi gulung balik.
         $kosong = (int) Masjid::create(['nama' => 'Templat Kosong '.uniqid()])->id;
-        config(['sppkms.masjid_id' => $kosong]);
+        config(['spkm.masjid_id' => $kosong]);
 
         $login = 'bdh_'.uniqid();
         $this->actingAs($this->admin)->post(route('tetapan.masjid.baru.simpan'), [

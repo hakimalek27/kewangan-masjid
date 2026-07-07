@@ -1,13 +1,13 @@
 <?php
 
 /**
- * Konfigurasi SPAKM — Sistem Pengurusan & Audit Kewangan Masjid.
+ * Konfigurasi SPKM — Sistem Pengurusan Kewangan Masjid.
  * Struktur menu mereplikasi SPPKMS V2.0 (9 kumpulan, 56 halaman) 1-ke-1 —
  * rujuk SPESIFIKASI-BINA-SEMULA.md Bahagian 3.
  */
 return [
 
-    'masjid_id' => (int) env('SPPKMS_MASJID_ID', 49),
+    'masjid_id' => (int) env('SPKM_MASJID_ID', 49),
 
     'legacy_url' => env('SPPKMS_LEGACY_URL', 'https://spm.mesrasuci.com'),
 

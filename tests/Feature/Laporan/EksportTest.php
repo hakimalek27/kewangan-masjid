@@ -32,7 +32,7 @@ class EksportTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id'     => config('sppkms.masjid_id'),
+            'masjid_id'     => config('spkm.masjid_id'),
             'login'         => 'uji_eksport_'.uniqid(),
             'nama_penuh'    => 'Ujian Eksport',
             'role'          => 'bendahari',

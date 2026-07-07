@@ -21,7 +21,7 @@ class AuditChainSilangMasjidTest extends TestCase
     public function test_rantai_utuh_bila_log_ke_masjid_lain_daripada_sesi(): void
     {
         // Sesi semasa "berada" di masjid A
-        app()->instance('current.masjid_id', config('sppkms.masjid_id'));
+        app()->instance('current.masjid_id', config('spkm.masjid_id'));
         app()->instance('current.user_id', 1);
 
         $svc = app(AuditTrailService::class);

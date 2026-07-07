@@ -30,7 +30,7 @@ class PenyataGayaNotaTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_gaya_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_gaya_'.uniqid(),
             'nama_penuh' => 'Ujian Gaya', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -70,7 +70,7 @@ class PenyataGayaNotaTest extends TestCase
     public function test_gaya_per_pengguna_berasingan(): void
     {
         $userB = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_gaya_b_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_gaya_b_'.uniqid(),
             'nama_penuh' => 'Ujian Gaya B', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -274,7 +274,7 @@ class PenyataGayaNotaTest extends TestCase
     public function test_penyata_bank_dgn_nota_ok(): void
     {
         $bankId = \App\Models\BankAccount::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))->value('id');
+            ->where('masjid_id', config('spkm.masjid_id'))->value('id');
         $this->actingAs($this->bendahari)
             ->get(route('penyata.bank', ['bank_account_id' => $bankId, 'bln' => 1, 'year' => 2026, 'nota' => 1]))
             ->assertOk()

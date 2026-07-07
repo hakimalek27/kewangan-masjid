@@ -1,4 +1,4 @@
-# HANDOVER — SPAKM (sppkms-v2)
+# HANDOVER — SPKM (sppkms-v2)
 > Nota serah tugas ringkas. Sejarah PENUH: `../spm-explore/SEJARAH-KERJA.md` (§7o–§7q terkini).
 > Laporan audit: `LAPORAN-AUDIT-MENYELURUH-20260702.md` · Pelan: `PELAN-PEMBAIKAN-AUDIT-20260702.md`.
 
@@ -20,7 +20,7 @@ buang masjid 50 · re-point header-COA · kolum `must_change_password` · view `
 1. **Merge cabang `fix/audit-20260702`** ke main.
 2. **Regen `install.sql`** untuk fresh-install: tambah `must_change_password`, COA `600-15030`, view `v_program_report` terkini.
 3. **Frontend:** `npm run build` + **pastikan `public/hot` TIADA** (jika ada → carta rosak `window.Chart is not a constructor`). Lihat SENARAI-SEMAK-GOLIVE.md §6.
-4. **Tukar kata laluan lalai sebenar:** `php artisan sppkms:reset-default-passwords` (admin/malmutaqqin masih guna lalai).
+4. **Tukar kata laluan lalai sebenar:** `php artisan spkm:reset-default-passwords` (admin/malmutaqqin masih guna lalai).
 5. **Config go-live:** API key AI, bot Telegram + webhook secret, service account GDrive, kredensial dual-write; `.env` production (APP_DEBUG=false, SESSION_SECURE_COOKIE=true).
 
 ## Didokumen — sengaja TIDAK diubah (ada rasional)

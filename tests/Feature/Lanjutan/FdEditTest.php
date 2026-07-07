@@ -28,7 +28,7 @@ class FdEditTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id'     => config('sppkms.masjid_id'),
+            'masjid_id'     => config('spkm.masjid_id'),
             'login'         => 'uji_fdedit_'.uniqid(),
             'nama_penuh'    => 'Ujian FD Edit',
             'role'          => 'bendahari',
@@ -37,7 +37,7 @@ class FdEditTest extends TestCase
         ]);
 
         $this->bank = BankAccount::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('status', 'AKTIF')->firstOrFail();
     }
 

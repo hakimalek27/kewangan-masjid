@@ -61,7 +61,7 @@ class YearEndService
             ->where('jv.status', 'POSTED')
             ->where('jv.masjid_id', $masjidId)
             ->where('jv.period_ym', '<=', "$tahun-12")
-            ->where('c.kod', config('sppkms.coa.akaun_sementara'))
+            ->where('c.kod', config('spkm.coa.akaun_sementara'))
             ->selectRaw('COALESCE(SUM(je.kredit - je.debit),0) as b')
             ->value('b');
 
@@ -96,7 +96,7 @@ class YearEndService
             throw new LogicException("Tutup tahun $tahunSebelum dahulu sebelum menutup tahun $tahun.");
         }
 
-        $dana = $this->journal->coaByKod(config('sppkms.coa.dana_terkumpul'), $masjidId);
+        $dana = $this->journal->coaByKod(config('spkm.coa.dana_terkumpul'), $masjidId);
         $bersih = '0.00';
 
         $voucher = DB::transaction(function () use ($tahun, $masjidId, $dana, &$bersih) {

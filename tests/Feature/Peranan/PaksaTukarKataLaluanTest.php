@@ -25,7 +25,7 @@ class PaksaTukarKataLaluanTest extends TestCase
     private function buat(bool $mesti): AppUser
     {
         return AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'pk_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'pk_'.uniqid(),
             'nama_penuh' => 'Uji', 'role' => 'bendahari',
             'password_hash' => Hash::make('lalai12345'), 'is_active' => 1,
             'must_change_password' => $mesti,

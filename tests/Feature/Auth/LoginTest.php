@@ -15,7 +15,7 @@ class LoginTest extends TestCase
     private function buatPengguna(string $role = 'bendahari'): AppUser
     {
         return AppUser::create([
-            'masjid_id'     => config('sppkms.masjid_id'),
+            'masjid_id'     => config('spkm.masjid_id'),
             'login'         => 'ujian_'.uniqid(),
             'nama_penuh'    => 'Pengguna Ujian',
             'role'          => $role,

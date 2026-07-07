@@ -44,7 +44,7 @@ class PengasinganDataMasjidTest extends TestCase
     {
         parent::setUp();
         $this->aktifkanKonteksMasjid();
-        $this->home = (int) config('sppkms.masjid_id');
+        $this->home = (int) config('spkm.masjid_id');
 
         // Masjid B baharu + semai COA standard (jadikan B berfungsi sepenuhnya)
         $this->masjidB = (int) Masjid::create(['nama' => 'Masjid B '.uniqid()])->id;

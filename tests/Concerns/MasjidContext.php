@@ -8,14 +8,14 @@ trait MasjidContext
 {
     protected function aktifkanKonteksMasjid(): void
     {
-        app()->instance('current.masjid_id', (int) config('sppkms.masjid_id'));
+        app()->instance('current.masjid_id', (int) config('spkm.masjid_id'));
         app()->instance('current.user_id', 1);
     }
 
     protected function coaId(string $kod): int
     {
         return (int) Coa::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('kod', $kod)
             ->value('id');
     }

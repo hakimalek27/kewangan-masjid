@@ -29,7 +29,7 @@ class ValidasiSkopMasjidTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_skop_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_skop_'.uniqid(),
             'nama_penuh' => 'Ujian Skop', 'role' => 'bendahari',
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -42,7 +42,7 @@ class ValidasiSkopMasjidTest extends TestCase
     private function rekodMasjidLain(string $model, array $cari, array $ubah)
     {
         $asal = $model::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where($cari)->firstOrFail();
         $klon = $asal->replicate();
         $klon->masjid_id = $this->masjidLain;

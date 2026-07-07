@@ -40,6 +40,6 @@ class Setting
     {
         return app()->bound('current.masjid_id')
             ? (int) app('current.masjid_id')
-            : (int) config('sppkms.masjid_id');
+            : (int) config('spkm.masjid_id');
     }
 }

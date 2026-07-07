@@ -16,7 +16,7 @@ class MasjidRule
     {
         $masjidId = app()->bound('current.masjid_id')
             ? (int) app('current.masjid_id')
-            : (int) config('sppkms.masjid_id');
+            : (int) config('spkm.masjid_id');
 
         return Rule::exists($table, $column)->where('masjid_id', $masjidId);
     }

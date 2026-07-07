@@ -25,7 +25,7 @@ class AsetLihatTest extends TestCase
         $this->aktifkanKonteksMasjid();
 
         $this->bendahari = AppUser::create([
-            'masjid_id'     => config('sppkms.masjid_id'),
+            'masjid_id'     => config('spkm.masjid_id'),
             'login'         => 'uji_asetlihat_'.uniqid(),
             'nama_penuh'    => 'Ujian Aset Lihat',
             'role'          => 'bendahari',

@@ -47,7 +47,7 @@ class BackupPemantauanTest extends TestCase
         \Illuminate\Support\Facades\Http::fake();
 
         $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('sppkms.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
+            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
@@ -56,7 +56,7 @@ class BackupPemantauanTest extends TestCase
 
         // Konfigurasi backup aktif (rollback selepas ujian oleh DatabaseTransactions)
         BackupConfig::withoutMasjidScope()->updateOrCreate(
-            ['masjid_id' => config('sppkms.masjid_id')],
+            ['masjid_id' => config('spkm.masjid_id')],
             [
                 'provider'         => 'GDRIVE',
                 'gdrive_folder_id' => 'folder-uji-123',
@@ -101,7 +101,7 @@ class BackupPemantauanTest extends TestCase
         $this->failSementara[] = $relPath;
 
         return BackupQueue::withoutMasjidScope()->create([
-            'masjid_id'    => config('sppkms.masjid_id'),
+            'masjid_id'    => config('spkm.masjid_id'),
             'jenis'        => 'TRANSACTION',
             'ref_id'       => 999999,
             'payload_path' => $relPath,
@@ -121,12 +121,12 @@ class BackupPemantauanTest extends TestCase
         $this->assertSame('OK', $log->status);
 
         // Uji-pulih: muat turun dari fake + sahkan → OK
-        $hasil = $service->ujiPulihTerkini((int) config('sppkms.masjid_id'));
+        $hasil = $service->ujiPulihTerkini((int) config('spkm.masjid_id'));
         $this->assertSame('ok', $hasil['status']);
 
         // Simulasi kerosakan di Drive → uji-pulih mesti kesan 'gagal'
         $this->gdrive->simpanan[FakeGdriveClient::FILE_ID] = 'kandungan-rosak';
-        $hasilRosak = $service->ujiPulihTerkini((int) config('sppkms.masjid_id'));
+        $hasilRosak = $service->ujiPulihTerkini((int) config('spkm.masjid_id'));
         $this->assertSame('gagal', $hasilRosak['status']);
     }
 
@@ -161,7 +161,7 @@ class BackupPemantauanTest extends TestCase
     {
         Queue::fake([RunBackupItem::class]);
         BackupConfig::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->update(['is_active' => 0]);
 
         $kutipan = $this->ciptaKutipan();
@@ -199,7 +199,7 @@ class BackupPemantauanTest extends TestCase
         $this->assertSame(hash('sha256', $this->gdrive->kandungan), $log->checksum_sha256);
         $this->assertSame(strlen($this->gdrive->kandungan), (int) $log->size_bytes);
 
-        $config = BackupConfig::withoutMasjidScope()->find(config('sppkms.masjid_id'));
+        $config = BackupConfig::withoutMasjidScope()->find(config('spkm.masjid_id'));
         $this->assertNotNull($config->last_backup_at, 'last_backup_at sepatutnya dikemaskini.');
     }
 
@@ -217,7 +217,7 @@ class BackupPemantauanTest extends TestCase
 
         $this->assertSame('PENDING', $item->refresh()->status); // menunggu retry
         $this->assertDatabaseHas('backup_log', [
-            'masjid_id' => config('sppkms.masjid_id'),
+            'masjid_id' => config('spkm.masjid_id'),
             'jenis'     => 'TRANSACTION',
             'status'    => 'FAILED',
         ]);
@@ -247,13 +247,13 @@ class BackupPemantauanTest extends TestCase
             $this->markTestSkipped('mysqldump tidak ditemui di '.self::MYSQLDUMP);
         }
 
-        config(['sppkms.mysqldump_path' => self::MYSQLDUMP]);
+        config(['spkm.mysqldump_path' => self::MYSQLDUMP]);
         Queue::fake([RunBackupItem::class]);
 
         (new RunDailyDbDump)->handle();
 
         $item = BackupQueue::withoutMasjidScope()
-            ->where('masjid_id', config('sppkms.masjid_id'))
+            ->where('masjid_id', config('spkm.masjid_id'))
             ->where('jenis', 'DB_DUMP')
             ->orderByDesc('id')
             ->first();
@@ -297,7 +297,7 @@ class BackupPemantauanTest extends TestCase
         Queue::fake([RunBackupItem::class]);
         $this->ciptaKutipan();
 
-        $this->assertSame(0, Artisan::call('sppkms:verify-audit-chain'));
+        $this->assertSame(0, Artisan::call('spkm:verify-audit-chain'));
         $this->assertStringContainsString('OK', Artisan::output());
     }
 
@@ -305,7 +305,7 @@ class BackupPemantauanTest extends TestCase
 
     public function test_prune_padam_backup_log_dan_fail_drive_melepasi_retensi(): void
     {
-        $mid = config('sppkms.masjid_id');
+        $mid = config('spkm.masjid_id');
         // Retensi 30 hari untuk masjid ini
         BackupConfig::withoutMasjidScope()->where('masjid_id', $mid)->update(['retention_days' => 30]);
 
@@ -334,7 +334,7 @@ class BackupPemantauanTest extends TestCase
 
     public function test_prune_padam_fail_payload_tempatan_lama_yang_done(): void
     {
-        $mid = config('sppkms.masjid_id');
+        $mid = config('spkm.masjid_id');
 
         // Payload DONE lama (10 hari) → patut dipadam
         $pathLama = 'backup-payload/uji-prune-'.uniqid().'.json';
