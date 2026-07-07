@@ -239,7 +239,7 @@ class BackupPemantauanTest extends TestCase
         $this->assertFalse($service->ujiPulih($log, 'kandungan-palsu'));
     }
 
-    // ---------- (d) RunDailyDbDump (mysqldump sebenar lawan sppkms_test) ----------
+    // ---------- (d) RunDailyDbDump (mysqldump sebenar lawan spkm_test) ----------
 
     public function test_run_daily_db_dump_memasukkan_barisan_db_dump(): void
     {
@@ -264,7 +264,7 @@ class BackupPemantauanTest extends TestCase
         // Dump kini dimampatkan gzip (.sql.gz) — nyahmampat dahulu sebelum semak
         $this->assertStringEndsWith('.sql.gz', $item->payload_path);
         $sql = gzdecode(Storage::disk('local')->get($item->payload_path));
-        $this->assertStringContainsString('CREATE TABLE', $sql); // dump sebenar DB sppkms_test
+        $this->assertStringContainsString('CREATE TABLE', $sql); // dump sebenar DB spkm_test
         $this->assertStringContainsString('journal_voucher', $sql);
 
         Queue::assertPushed(RunBackupItem::class, fn ($job) => $job->backupQueueId === $item->id);
