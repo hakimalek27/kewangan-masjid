@@ -226,14 +226,14 @@ class PengasinganDataMasjidTest extends TestCase
             'jumlah' => '5.00', 'auto_resit' => '1', 'semakan' => '1',
         ];
 
-        // BOLEH tulis kewangan: BENDAHARI sahaja (maker)
-        foreach (['bendahari'] as $role) {
+        // BOLEH tulis kewangan: BENDAHARI (maker) + ADMIN (superadmin akses penuh)
+        foreach (['bendahari', 'admin'] as $role) {
             $u = $this->buatUser($role, $this->home);
             $this->actingAs($u)->post(route('kutipan.simpan'), $data)->assertSessionHasNoErrors();
         }
 
-        // DISEKAT tulis (403): admin (sistem), pentadbir (pentadbir masjid), pengerusi, setiausaha, juruaudit, viewer
-        foreach (['admin', 'pentadbir', 'pengerusi', 'setiausaha', 'juruaudit', 'viewer'] as $role) {
+        // DISEKAT tulis (403): pentadbir (pentadbir masjid), pengerusi, setiausaha, juruaudit, viewer
+        foreach (['pentadbir', 'pengerusi', 'setiausaha', 'juruaudit', 'viewer'] as $role) {
             $u = $this->buatUser($role, $this->home);
             $this->actingAs($u)->post(route('kutipan.simpan'), $data)
                 ->assertForbidden();

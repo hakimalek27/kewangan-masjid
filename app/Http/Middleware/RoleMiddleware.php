@@ -19,6 +19,21 @@ class RoleMiddleware
 
         $role = $user->role->value;
 
+        // Superadmin (admin) lepas SEMUA pagar peranan — akses penuh baca+tulis
+        // semua tenant (keputusan reka bentuk). Tulis melalui pagar bukan-admin
+        // direkodkan sebagai ADMIN_OVERRIDE untuk jejak keselamatan.
+        if ($role === \App\Enums\UserRole::ADMIN->value) {
+            if (!in_array('admin', $roles, true) && !$request->isMethodSafe()) {
+                app(SecurityEventService::class)->log(
+                    'ADMIN_OVERRIDE',
+                    'Admin menulis melalui pagar ['.implode(',', $roles).'] di '.$request->path(),
+                    'LOW'
+                );
+            }
+
+            return $next($request);
+        }
+
         if (!in_array($role, $roles, true)) {
             app(SecurityEventService::class)->log(
                 'PERMISSION_DENIED',

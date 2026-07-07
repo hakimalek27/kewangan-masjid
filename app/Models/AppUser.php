@@ -75,21 +75,21 @@ class AppUser extends Authenticatable
         return $this->role === UserRole::ADMIN;
     }
 
-    /** Boleh TULIS kewangan (maker) — BENDAHARI sahaja. Admin = sistem (tiada tulis kewangan). */
+    /** Boleh TULIS kewangan (maker) — BENDAHARI + ADMIN (superadmin akses penuh semua tenant). */
     public function bolehTulis(): bool
     {
-        return $this->role === UserRole::BENDAHARI;
+        return in_array($this->role, [UserRole::BENDAHARI, UserRole::ADMIN], true);
     }
 
-    /** Boleh urus TETAPAN masjid (bank/COA/resit/tandatangan/kawalan/tutup-tahun) — bendahari & Pentadbir Masjid. */
+    /** Boleh urus TETAPAN masjid (bank/COA/resit/tandatangan/kawalan/tutup-tahun) — bendahari, Pentadbir Masjid & admin. */
     public function bolehUrusMasjid(): bool
     {
-        return in_array($this->role, [UserRole::BENDAHARI, UserRole::PENTADBIR], true);
+        return in_array($this->role, [UserRole::BENDAHARI, UserRole::PENTADBIR, UserRole::ADMIN], true);
     }
 
-    /** Boleh tulis daftar BUKAN-kewangan (sewa, peti besi, info masjid) — bendahari, setiausaha & pentadbir. */
+    /** Boleh tulis daftar BUKAN-kewangan (sewa, peti besi, info masjid) — bendahari, setiausaha, pentadbir & admin. */
     public function bolehTulisDaftar(): bool
     {
-        return in_array($this->role, [UserRole::BENDAHARI, UserRole::SETIAUSAHA, UserRole::PENTADBIR], true);
+        return in_array($this->role, [UserRole::BENDAHARI, UserRole::SETIAUSAHA, UserRole::PENTADBIR, UserRole::ADMIN], true);
     }
 }

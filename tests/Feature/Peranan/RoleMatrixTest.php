@@ -10,7 +10,8 @@ use Tests\Concerns\MasjidContext;
 use Tests\TestCase;
 
 /**
- * Matriks peranan model baharu: ADMIN = sistem (TIADA tulis kewangan, BUKAN pelulus);
+ * Matriks peranan: ADMIN = superadmin (akses PENUH baca+tulis semua tenant,
+ * tulis melalui pagar bukan-admin direkod sebagai ADMIN_OVERRIDE);
  * BENDAHARI = maker; PENGERUSI = checker; SETIAUSAHA = tulis daftar bukan-kewangan;
  * JURUAUDIT = baca penuh + jejak audit, sifar tulis.
  */
@@ -33,22 +34,29 @@ class RoleMatrixTest extends TestCase
         ]);
     }
 
-    public function test_admin_tiada_tulis_kewangan_atau_tetapan_masjid(): void
+    public function test_admin_akses_penuh_tulis_kewangan_dan_tetapan_masjid(): void
     {
         $admin = $this->buat('admin');
 
-        // Tulis kewangan + tetapan aras-masjid → 403 untuk admin (sistem sahaja).
+        // Superadmin LEPAS semua pagar peranan (payload kosong → 302 validasi, BUKAN 403).
         foreach (['kutipan.simpan', 'belanja.simpan', 'belanjawan.simpan', 'dana.simpan',
                   'kawalan.simpan', 'tetapan.masjid.kemaskini'] as $rt) {
-            $this->actingAs($admin)->post(route($rt), [])->assertForbidden();
+            $this->assertNotSame(403, $this->actingAs($admin)->post(route($rt), [])->status(), $rt);
         }
 
-        // Tetapi admin BOLEH baca halaman + Konsol Sistem.
+        // Baca + Konsol Sistem kekal.
         $this->actingAs($admin)->get(route('kawalan.index'))->assertOk();
         $this->actingAs($admin)->get(route('sistem.console'))->assertOk();
+
+        // Tulis melalui pagar bukan-admin direkodkan sebagai ADMIN_OVERRIDE.
+        $this->assertTrue(
+            \App\Models\SecurityEvent::withoutMasjidScope()
+                ->where('jenis', 'ADMIN_OVERRIDE')->exists(),
+            'ADMIN_OVERRIDE security_event tidak direkodkan'
+        );
     }
 
-    public function test_admin_bukan_pelulus_pengerusi_pelulus(): void
+    public function test_admin_juga_pelulus_dan_pengerusi_pelulus(): void
     {
         $admin = $this->buat('admin');
         $pengerusi = $this->buat('pengerusi');
@@ -59,12 +67,16 @@ class RoleMatrixTest extends TestCase
             'cara_bayar' => 'EFT', 'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
         ]);
 
-        // Admin BUKAN pelulus → 403; tetapi boleh LIHAT senarai kelulusan.
-        $this->actingAs($admin)->post(route('kelulusan.lulus', $approval->id))->assertForbidden();
-        $this->actingAs($admin)->get(route('kelulusan.index'))->assertOk();
-
-        // Pengerusi = pelulus → bukan 403 (lulus dimainkan; sekurang-kurangnya lepas pagar peranan).
+        // Pengerusi = pelulus → bukan 403 (lepas pagar peranan).
         $this->assertNotSame(403, $this->actingAs($pengerusi)->post(route('kelulusan.lulus', $approval->id))->status());
+
+        // Superadmin JUGA lepas pagar pengerusi (akses penuh) + boleh lihat senarai.
+        $approval2 = app(ApprovalService::class)->mohon('BAYARAN', 600.0, [
+            'pemohon' => 'UJIAN2', 'coa_id' => $this->coaId('600-06000'), 'jumlah' => '600',
+            'cara_bayar' => 'EFT', 'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
+        ]);
+        $this->assertNotSame(403, $this->actingAs($admin)->post(route('kelulusan.lulus', $approval2->id))->status());
+        $this->actingAs($admin)->get(route('kelulusan.index'))->assertOk();
     }
 
     public function test_pentadbir_masjid_urus_tetapan_tiada_rekod_kewangan(): void
