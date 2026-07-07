@@ -235,6 +235,99 @@ class SemakPenyataTest extends TestCase
         app()->instance('current.masjid_id', $this->masjid);
     }
 
+    public function test_rekod_dua_kali_hanya_satu_jurnal(): void
+    {
+        $this->fakeAi();
+        $batch = $this->muatFail();
+        $this->jalankanJob($batch->id);
+
+        $line = BankStatementLine::where('batch_id', $batch->id)->where('kredit', '100.00')->firstOrFail();
+        $sebelum = (int) Kutipan::withoutMasjidScope()->max('id');
+
+        app(SemakPenyataService::class)->rekodBaris($line, ['coa_id' => $this->coaId('400-03010')]);
+
+        // Klik kedua pada baris sama → mesti ditolak, TIADA jurnal kedua.
+        try {
+            app(SemakPenyataService::class)->rekodBaris($line->fresh(), ['coa_id' => $this->coaId('400-03010')]);
+            $this->fail('Rekod kedua sepatutnya ditolak');
+        } catch (\InvalidArgumentException) {
+            // dijangka
+        }
+
+        $this->assertSame(1, Kutipan::withoutMasjidScope()->where('id', '>', $sebelum)->count());
+    }
+
+    public function test_coa_keluarga_salah_ditolak_di_pelayan(): void
+    {
+        $this->fakeAi();
+        $batch = $this->muatFail();
+        $this->jalankanJob($batch->id);
+
+        // Wang MASUK direkod ke COA belanja 600-% → mesti ditolak (P&L salah kelas).
+        $line = BankStatementLine::where('batch_id', $batch->id)->where('kredit', '100.00')->firstOrFail();
+
+        $this->expectException(\InvalidArgumentException::class);
+        app(SemakPenyataService::class)->rekodBaris($line, ['coa_id' => $this->coaId('600-06000')]);
+    }
+
+    public function test_upload_semula_selepas_gagal_guna_semula_batch(): void
+    {
+        // Cubaan 1: AI gagal → batch GAGAL.
+        Http::fake(['api.openai.com/*' => Http::response('ralat', 500)]);
+        Queue::fake();
+        $fail = UploadedFile::fake()->create('penyata.pdf', 120, 'application/pdf');
+        $batch = app(SemakPenyataService::class)->muatNaik($this->bankId, $fail);
+        try {
+            $this->jalankanJob($batch->id);
+        } catch (\Throwable) {
+        }
+        (new ProsesPenyataAi($batch->id))->failed(new \App\Ai\AiException('gagal'));
+        $this->assertSame('GAGAL', $batch->fresh()->status);
+
+        // Cubaan 2: fail SAMA dimuat naik semula → batch DIGUNA SEMULA (bukan disekat).
+        $batch2 = app(SemakPenyataService::class)->muatNaik($this->bankId, $fail);
+        $this->assertSame($batch->id, $batch2->id);
+        $this->assertSame('UPLOADED', $batch2->status);
+        $this->assertNull($batch2->error_text);
+    }
+
+    public function test_duplikat_sah_dalam_satu_penyata_dikekalkan(): void
+    {
+        // Dua derma QR RM10.00 pada hari & deskripsi sama = transaksi SAH berasingan.
+        Http::fake(['api.openai.com/*' => Http::response([
+            'choices' => [[
+                'message' => ['content' => json_encode(['lines' => [
+                    ['tarikh' => '2026-06-15', 'deskripsi' => 'DUITNOW QR', 'debit' => 0, 'kredit' => 10.00,
+                     'cadangan_jenis' => 'KUTIPAN', 'cadangan_coa' => '400-03010', 'confidence' => 90],
+                    ['tarikh' => '2026-06-15', 'deskripsi' => 'DUITNOW QR', 'debit' => 0, 'kredit' => 10.00,
+                     'cadangan_jenis' => 'KUTIPAN', 'cadangan_coa' => '400-03010', 'confidence' => 90],
+                ]])],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['total_tokens' => 1000],
+        ])]);
+
+        $batch = $this->muatFail();
+        $this->jalankanJob($batch->id);
+
+        $this->assertSame(2, BankStatementLine::where('batch_id', $batch->id)->count(),
+            'Duplikat sah dalam SATU penyata tidak boleh digugurkan');
+    }
+
+    public function test_baris_matched_tidak_boleh_diabaikan(): void
+    {
+        $this->fakeAi();
+        $batch = $this->muatFail();
+        $this->jalankanJob($batch->id);
+
+        $line = BankStatementLine::where('batch_id', $batch->id)->where('kredit', '100.00')->firstOrFail();
+        app(SemakPenyataService::class)->rekodBaris($line, ['coa_id' => $this->coaId('400-03010')]);
+
+        // Baris sudah MATCHED (jurnal diposkan) → abai mesti disekat.
+        $this->expectException(\InvalidArgumentException::class);
+        app(\App\Services\Lanjutan\ReconciliationService::class)->setStatus($line->fresh(), 'IGNORED');
+    }
+
     public function test_openai_pdf_hantar_blok_fail(): void
     {
         $this->fakeAi();

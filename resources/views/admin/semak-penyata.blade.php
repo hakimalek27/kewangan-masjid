@@ -134,6 +134,7 @@
                                 <th class="text-end">{{ __('Token') }}</th>
                                 <th class="text-end">{{ __('Kos (USD)') }}</th>
                                 <th>{{ __('Tarikh') }}</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -150,9 +151,20 @@
                                     <td class="text-end">{{ $l->tokens_used ? number_format($l->tokens_used) : '—' }}</td>
                                     <td class="text-end">{{ $l->cost_usd !== null ? number_format((float) $l->cost_usd, 4) : '—' }}</td>
                                     <td><small>{{ $l->created_at?->format('Y-m-d H:i') }}</small></td>
+                                    <td class="text-end">
+                                        @if (in_array($l->status, ['UPLOADED', 'AI_PROCESSING'], true))
+                                            <form method="POST" action="{{ route('admin.semakpenyata.gagalkan', $l->id) }}" class="d-inline"
+                                                  onsubmit="return confirm('{{ __('Tanda batch ini GAGAL? Kuota tenant akan dibebaskan.') }}')">
+                                                @csrf
+                                                <button class="btn btn-sm btn-outline-danger" title="{{ __('Tanda GAGAL (batch tersekat)') }}">
+                                                    <i class="bi bi-x-octagon"></i>
+                                                </button>
+                                            </form>
+                                        @endif
+                                    </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="8" class="text-center text-muted py-3">{{ __('Tiada rekod penggunaan lagi.') }}</td></tr>
+                                <tr><td colspan="9" class="text-center text-muted py-3">{{ __('Tiada rekod penggunaan lagi.') }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>

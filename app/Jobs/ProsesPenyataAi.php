@@ -49,9 +49,16 @@ class ProsesPenyataAi implements ShouldQueue
             return; // idempotent
         }
         if ($batch->baris()->exists()) {
-            $batch->update(['status' => 'SEDIA']);
+            // Retry selepas insert komit tetapi langkah hilir gagal — lengkapkan
+            // langkah hilir (padanAuto + kiraan), jangan masukkan baris semula.
+            $dipadan = $recon->padanAuto((int) $batch->bank_account_id, (int) $batch->masjid_id);
+            $batch->update([
+                'status' => 'SEDIA',
+                'bil_baris' => $batch->baris()->count(),
+                'bil_auto_padan' => $batch->baris()->where('status', 'MATCHED')->count(),
+            ]);
 
-            return; // baris sudah dimasukkan — jangan duplikasi
+            return;
         }
 
         // Pertahanan job-side: toggle global mungkin dimatikan selepas dispatch.
@@ -78,28 +85,51 @@ class ProsesPenyataAi implements ShouldQueue
                 throw new AiException('AI tidak menemui sebarang baris transaksi dalam penyata ini.');
             }
 
+            // Dedup merentas import LAMA sahaja (CSV / batch bertindih) — duplikat
+            // SAH dalam SATU penyata (cth. dua derma QR RM10 hari sama) mesti
+            // dikekalkan. Pra-kira bilangan sedia ada di DB per kunci 5-medan;
+            // salinan ke-N dalam respons hanya dilangkau jika DB sudah ada ≥ N.
+            $kunci = fn (string $tarikh, string $debit, string $kredit, string $deskripsi) => $tarikh.'|'.$debit.'|'.$kredit.'|'.$deskripsi;
+            $sediaAda = [];
+            $dilihat = [];
             $bilBaris = 0;
-            DB::transaction(function () use ($hasil, $batch, $cadangan, $masjidId, &$bilBaris) {
+            $bilLangkau = 0;
+
+            DB::transaction(function () use ($hasil, $batch, $cadangan, $masjidId, $kunci, &$sediaAda, &$dilihat, &$bilBaris, &$bilLangkau) {
                 foreach ($hasil->lines as $ln) {
+                    // Tarikh tak sah daripada AI: JANGAN reka senyap — guna tarikh
+                    // hari ini TETAPI tanda keyakinan 0 + label supaya bendahari perasan.
+                    $tarikhSah = $ln->tarikh !== null;
                     $tarikh = $ln->tarikh ?? now()->format('Y-m-d');
                     $deskripsi = mb_substr(trim((string) $ln->deskripsi), 0, 255);
-
-                    // Dedup 5-medan sama seperti ReconciliationService::importCsv (E8).
-                    $wujud = BankStatementLine::where('bank_account_id', $batch->bank_account_id)
-                        ->where('tarikh', $tarikh)
-                        ->where('debit', $ln->debit)
-                        ->where('kredit', $ln->kredit)
-                        ->where('deskripsi', $deskripsi)
-                        ->exists();
-                    if ($wujud) {
-                        continue;
+                    if (!$tarikhSah) {
+                        $deskripsi = mb_substr('[?tarikh] '.$deskripsi, 0, 255);
                     }
 
+                    $k = $kunci($tarikh, $ln->debit, $ln->kredit, $deskripsi);
+                    if (!array_key_exists($k, $sediaAda)) {
+                        $sediaAda[$k] = BankStatementLine::where('bank_account_id', $batch->bank_account_id)
+                            ->where('tarikh', $tarikh)
+                            ->where('debit', $ln->debit)
+                            ->where('kredit', $ln->kredit)
+                            ->where('deskripsi', $deskripsi)
+                            ->where(fn ($q) => $q->whereNull('batch_id')->orWhere('batch_id', '!=', $batch->id))
+                            ->count();
+                    }
+                    $dilihat[$k] = ($dilihat[$k] ?? 0) + 1;
+                    if ($dilihat[$k] <= $sediaAda[$k]) {
+                        $bilLangkau++;
+
+                        continue; // sudah wujud dari import terdahulu
+                    }
+
+                    // Jenis SENTIASA ikut tanda amaun (teks AI boleh bercanggah);
+                    // cadangan AI hanya digunakan untuk pilihan COA.
                     $masuk = (float) $ln->kredit > 0;
-                    $jenis = $ln->cadanganJenis ?? ($masuk ? 'KUTIPAN' : 'BAYARAN');
+                    $jenis = $masuk ? 'KUTIPAN' : 'BAYARAN';
 
                     $coaId = $cadangan->petakan($masjidId, $ln->cadanganCoa)
-                        ?? ($jenis === 'KUTIPAN'
+                        ?? ($masuk
                             ? $cadangan->fallbackKutipan($masjidId)
                             : $cadangan->fallbackBayaran($masjidId));
 
@@ -114,7 +144,7 @@ class ProsesPenyataAi implements ShouldQueue
                         'batch_id' => $batch->id,
                         'cadangan_jenis' => $jenis,
                         'cadangan_coa_id' => $coaId,
-                        'ai_confidence' => $ln->confidence,
+                        'ai_confidence' => $tarikhSah ? $ln->confidence : 0,
                     ]);
                     $bilBaris++;
                 }
@@ -138,7 +168,7 @@ class ProsesPenyataAi implements ShouldQueue
 
             $audit->log('UPDATE', 'penyata_semakan', null, [
                 'batch' => $batch->id, 'bil_baris' => $bilBaris, 'auto_padan' => $dipadan,
-                'tokens' => $hasil->tokensUsed,
+                'bil_langkau_duplikat' => $bilLangkau, 'tokens' => $hasil->tokensUsed,
             ], $batch->id, masjidId: $masjidId);
 
             // Webhook best-effort (kegagalan tidak memusnahkan batch yang siap).
@@ -161,12 +191,34 @@ class ProsesPenyataAi implements ShouldQueue
     /** Dipanggil Laravel HANYA selepas semua percubaan habis — GAGAL membebaskan kuota. */
     public function failed(Throwable $e): void
     {
+        report($e); // detail penuh ke log — error_text kepada tenant DITAPIS
+
         PenyataSemakan::withoutMasjidScope()
             ->whereKey($this->batchId)
             ->whereIn('status', ['UPLOADED', 'AI_PROCESSING'])
             ->update([
                 'status' => 'GAGAL',
-                'error_text' => mb_substr($e->getMessage(), 0, 1000),
+                'error_text' => $this->mesejGagalTenant($e),
             ]);
+    }
+
+    /**
+     * Mesej gagal yang selamat dipaparkan kepada tenant — badan respons OpenAI
+     * (boleh mengandungi maklumat akaun/organisasi kunci pusat) TIDAK didedahkan.
+     */
+    private function mesejGagalTenant(Throwable $e): string
+    {
+        if ($e instanceof AiException) {
+            // Mesej buatan kita sendiri (BM, tiada badan respons) selamat;
+            // mesej berprefix HTTP mengandungi badan respons provider — tapis.
+            if (!str_contains($e->getMessage(), 'HTTP')) {
+                return mb_substr($e->getMessage(), 0, 1000);
+            }
+
+            return 'Panggilan AI gagal'.($e->httpStatus ? ' (HTTP '.$e->httpStatus.')' : '')
+                .'. Sila cuba muat naik semula; jika berterusan hubungi pentadbir sistem.';
+        }
+
+        return 'Pemprosesan gagal. Sila cuba muat naik semula; jika berterusan hubungi pentadbir sistem.';
     }
 }

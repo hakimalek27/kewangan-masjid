@@ -20,7 +20,7 @@ Artisan::command('inspire', function () {
 | Penjadual Fasa 7 — backup luar tapak & pemantauan integriti
 |--------------------------------------------------------------------------
 | Jalankan worker penjadual: php artisan schedule:work (atau cron schedule:run)
-| dan worker barisan:        php artisan queue:work --queue=ai,webhook,backup,sync
+| dan worker barisan:        php artisan queue:work --queue=default,ai,webhook,backup,sync
 */
 
 // 02:00 — dump penuh DB → sulit → Google Drive (mod HARIAN)

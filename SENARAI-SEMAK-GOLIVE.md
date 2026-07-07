@@ -23,7 +23,7 @@ Ikut turutan ini sebelum sistem digunakan sebenar.
 
 ## 4. Penjadual & queue
 - [ ] Cron: `* * * * * php artisan schedule:run` (backup 02:00, prune 03:30, sapu-lampiran 04:00, integriti 06:30, FD 07:00, defisit 07:30, baki-rendah 08:00, susut-nilai 1hb 01:00).
-- [ ] Worker queue berjalan: `php artisan queue:work` (queue: default, ai, webhook, sync).
+- [ ] Worker queue berjalan: `php artisan queue:work --queue=default,ai,webhook,backup,sync` (TANPA `--queue=` hanya queue `default` diproses — AI/webhook/backup/sync akan gagal senyap).
 
 ## 5. Pengesahan akhir
 - [ ] `php artisan spkm:verify-balance` → semua voucher seimbang.

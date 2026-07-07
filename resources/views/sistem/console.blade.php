@@ -72,7 +72,7 @@
                                 <input type="hidden" name="masjid_id" value="{{ $m->id }}">
                                 <input type="hidden" name="ke" value="dashboard">
                                 <button type="submit" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i>{{ __('Masuk') }}
+                                    <i class="bi bi-box-arrow-in-right me-1"></i>{{ __('Masuk Masjid') }}
                                 </button>
                             </form>
                         </td>

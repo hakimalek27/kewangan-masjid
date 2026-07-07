@@ -11,7 +11,7 @@ Ujian E2E ini mengesahkan, dalam pelayar sebenar, bahawa:
 
 ## Jangan sentuh pangkalan data produksi
 
-Ujian ini dijalankan terhadap **klon `spkm_test`**, bukan `sppkms`.
+Ujian ini dijalankan terhadap **klon `spkm_test`**, bukan `spkm` (produksi).
 
 ## Cara jalan
 

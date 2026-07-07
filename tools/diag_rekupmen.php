@@ -15,7 +15,7 @@ Config::set('database.connections.mariadb.database', 'sppkms_test');
 DB::purge('mariadb');
 
 $login = $argv[1]; $pass = $argv[2];
-$base = rtrim(config('sppkms.legacy_url'), '/').'/';
+$base = rtrim(config('spkm.legacy_url'), '/').'/';
 
 // Login
 $r = Http::asForm()->withOptions(['allow_redirects' => false, 'verify' => config('dualwrite.verify', true)])

@@ -51,7 +51,6 @@ class SemakPenyataAdminController extends Controller
             'kosPer1k' => Setting::get('sp_kos_per_1k_usd', null, self::G),
             'tenants' => $tenants,
             'log' => PenyataSemakan::withoutMasjidScope()
-                ->with('bank')
                 ->orderByDesc('id')
                 ->paginate(30),
             'namaMasjid' => Masjid::query()->pluck('nama', 'id'),
@@ -78,7 +77,7 @@ class SemakPenyataAdminController extends Controller
         $data = $request->validate([
             'api_key' => ['nullable', 'string', 'max:200'],
             'model' => ['required', 'string', 'max:80'],
-            'base_url' => ['nullable', 'url', 'max:200'],
+            'base_url' => ['nullable', 'url:https', 'max:200'],
             'kos_per_1k' => ['nullable', 'numeric', 'min:0', 'max:10'],
         ]);
 
@@ -112,6 +111,32 @@ class SemakPenyataAdminController extends Controller
 
         return redirect()->route('admin.semakpenyata')
             ->with('success', "Had kuota {$masjid->nama} ditetapkan kepada {$data['kuota']}/bulan.");
+    }
+
+    /**
+     * Paksa-GAGAL batch tersekat (UPLOADED/AI_PROCESSING — cth. worker mati,
+     * job hilang) supaya kuota tenant dibebaskan & fail boleh dimuat naik semula.
+     * Ambil TANPA skop masjid — halaman ini merentas semua tenant ({id} mentah,
+     * bukan route-binding berskop).
+     */
+    public function gagalkan(int $id): RedirectResponse
+    {
+        $batch = PenyataSemakan::withoutMasjidScope()->findOrFail($id);
+
+        if (!in_array($batch->status, ['UPLOADED', 'AI_PROCESSING'], true)) {
+            return back()->with('error', "Batch #{$batch->id} berstatus {$batch->status} — hanya batch tersekat boleh digagalkan.");
+        }
+
+        $batch->update([
+            'status' => 'GAGAL',
+            'error_text' => 'Dibatalkan oleh pentadbir sistem (batch tersekat).',
+        ]);
+
+        $this->audit->log('UPDATE', 'penyata_semakan', ['status' => 'UPLOADED/AI_PROCESSING'],
+            ['status' => 'GAGAL', 'nota' => 'paksa-gagal oleh admin'], $batch->id, masjidId: (int) $batch->masjid_id);
+
+        return redirect()->route('admin.semakpenyata')
+            ->with('success', "Batch #{$batch->id} ditanda GAGAL — kuota tenant dibebaskan.");
     }
 
     /** Top-up kuota bulan SEMASA sahaja untuk satu tenant. */

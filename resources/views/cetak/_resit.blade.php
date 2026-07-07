@@ -44,7 +44,7 @@
     <table class="items">
         <thead>
             <tr>
-                <th style="width:8%; text-align:center;">{{ __('Bil') }}</th>
+                <th style="width:8%; text-align:center;">{{ __('Bil.') }}</th>
                 <th>{{ __('Penerangan') }}</th>
                 <th style="width:24%; text-align:right;">{{ __('Jumlah (RM)') }}</th>
             </tr>

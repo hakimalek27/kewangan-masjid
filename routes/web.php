@@ -287,6 +287,7 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         Route::post('/semak-penyata/kunci', [SemakPenyataAdminController::class, 'simpanKunci'])->name('admin.semakpenyata.kunci');
         Route::post('/semak-penyata/kuota/{masjid}', [SemakPenyataAdminController::class, 'simpanKuota'])->whereNumber('masjid')->name('admin.semakpenyata.kuota');
         Route::post('/semak-penyata/topup/{masjid}', [SemakPenyataAdminController::class, 'topup'])->whereNumber('masjid')->name('admin.semakpenyata.topup');
+        Route::post('/semak-penyata/batch/{id}/gagalkan', [SemakPenyataAdminController::class, 'gagalkan'])->whereNumber('id')->name('admin.semakpenyata.gagalkan');
     });
 
     // Jejak audit (BACA) — admin + JURUAUDIT (semakan bebas); pengesahan POST kekal admin.

@@ -33,7 +33,7 @@ $login = $argv[1] ?? null;
 $pass  = $argv[2] ?? null;
 if (!$login || !$pass) { fwrite(STDERR, "Guna: php tools/dual_write_live_test.php <LOGIN> <PASSWORD>\n"); exit(1); }
 
-$mid = (int) config('sppkms.masjid_id');
+$mid = (int) config('spkm.masjid_id');
 app()->instance('current.masjid_id', $mid);
 app()->instance('current.user_id', 1);
 

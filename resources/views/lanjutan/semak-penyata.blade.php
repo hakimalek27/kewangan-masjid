@@ -102,7 +102,7 @@
                             <div class="small text-muted">{{ __('Sudah Padan') }}</div><div class="fw-bold text-success">{{ $sudah->where('status','MATCHED')->count() }}</div>
                         </div></div></div>
                         <div class="col"><div class="card text-center shadow-sm"><div class="card-body py-2">
-                            <div class="small text-muted">{{ __('Beza Bersih') }}</div><div class="fw-bold">{{ $laporan['beza'] }}</div>
+                            <div class="small text-muted" title="{{ __('Penyata vs buku — meliputi SEMUA baris penyata akaun bank ini (bukan batch ini sahaja)') }}">{{ __('Beza Akaun') }}</div><div class="fw-bold">{{ $laporan['beza'] }}</div>
                         </div></div></div>
                     </div>
                 @endif
@@ -227,6 +227,9 @@
                         <label class="form-label small" for="rk-deskripsi">{{ __('Deskripsi') }}</label>
                         <input type="text" name="deskripsi" id="rk-deskripsi" maxlength="500" class="form-control form-control-sm">
                     </div>
+                    <div class="alert alert-light border py-1 px-2 small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>{{ __('Belian aset atau pemindahan PWR? Guna Abai dan rekod di modul asal (Perbelanjaan Aset / Rekupmen).') }}
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ __('Batal') }}</button>
@@ -243,13 +246,22 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const COA = { KUTIPAN: @json($coaHasilJson), BAYARAN: @json($coaBelanjaJson) };
-            const rekodBase = "{{ url('/semak-penyata/baris') }}";
+            const rekodBase = @json(route('semakpenyata.index')) + '/baris';
 
-            // Poll status semasa pemprosesan
+            // Poll status semasa pemprosesan — berhenti selepas ~5 minit (75 × 4s)
+            // dan tunjuk mesej supaya spinner tidak berputar selamanya jika job hilang.
             const kad = document.getElementById('kad-proses');
             if (kad) {
                 const url = kad.dataset.url;
-                setInterval(function () {
+                let cubaan = 0;
+                const timer = setInterval(function () {
+                    if (++cubaan > 75) {
+                        clearInterval(timer);
+                        const badan = kad.querySelector('.card-body');
+                        if (badan) badan.innerHTML = '<div class="text-warning py-4"><i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>'
+                            + @json(__('Pemprosesan mengambil masa luar biasa. Sila muat semula halaman kemudian atau hubungi pentadbir sistem.')) + '</div>';
+                        return;
+                    }
                     fetch(url, { headers: { 'Accept': 'application/json' } })
                         .then(r => r.json())
                         .then(d => { if (d.status === 'SEDIA' || d.status === 'GAGAL') location.reload(); })

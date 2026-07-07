@@ -59,6 +59,10 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Jangan flash kunci API ke sesi bila validasi gagal (borang kunci pusat
+        // Semak Penyata AI / provider AI) — elak plaintext kunci dalam sesi.
+        $exceptions->dontFlash(['api_key', 'current_password', 'password', 'password_confirmation']);
+
         /*
          | Fasa 7 — log ralat global ke jadual error_log untuk halaman
          | /admin/ralat. Best-effort dengan pengawal gelung: jika penulisan

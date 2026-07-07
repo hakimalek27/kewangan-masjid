@@ -192,6 +192,15 @@ class ReconciliationService
             throw new InvalidArgumentException('Status tidak sah.');
         }
 
+        // Baris MATCHED tidak boleh diabaikan/dibuang padanan — terutamanya baris
+        // batch Semak Penyata (AI) yang voucher-nya SUDAH diposkan; memadam pautan
+        // membolehkan voucher itu dipadan semula ke baris lain (padanan berganda).
+        if ($line->status === 'MATCHED') {
+            throw new InvalidArgumentException(
+                'Baris ini telah dipadankan dengan voucher #'.$line->matched_voucher_id.' — tidak boleh diabaikan.'
+            );
+        }
+
         $line->update(['status' => $status, 'matched_voucher_id' => null]);
     }
 

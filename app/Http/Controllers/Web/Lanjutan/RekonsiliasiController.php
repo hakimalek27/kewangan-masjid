@@ -129,7 +129,11 @@ class RekonsiliasiController extends Controller
     {
         $this->pastikanBarisMilikMasjid($line);
 
-        $this->servis->setStatus($line, 'IGNORED');
+        try {
+            $this->servis->setStatus($line, 'IGNORED');
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['padan' => $e->getMessage()]);
+        }
 
         return redirect()->route('rekonsiliasi.index', ['bank_account_id' => $line->bank_account_id])
             ->with('success', "Baris penyata #{$line->id} diabaikan.");

@@ -34,6 +34,22 @@ class SemakPenyataService
     {
         $masjidId = (int) app('current.masjid_id');
 
+        // Kunci per-masjid: semakan kuota + cipta batch mesti atomik — halang
+        // dua muat naik selari memintas had (TOCTOU). Degrade: gagal mesra.
+        $lock = \Illuminate\Support\Facades\Cache::lock('semak-penyata:'.$masjidId, 15);
+        if (!$lock->get()) {
+            throw new InvalidArgumentException('Muat naik lain sedang diproses — sila cuba sebentar lagi.');
+        }
+
+        try {
+            return $this->muatNaikDalamKunci($bankAccountId, $fail, $masjidId);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function muatNaikDalamKunci(int $bankAccountId, UploadedFile $fail, int $masjidId): PenyataSemakan
+    {
         if (!$this->kuota->boleh($masjidId)) {
             $baki = $this->kuota->remaining($masjidId);
             $had = $this->kuota->effectiveLimit($masjidId);
@@ -49,11 +65,17 @@ class SemakPenyataService
 
         $hash = hash_file('sha256', $fail->getRealPath());
         $wujud = PenyataSemakan::where('file_hash', $hash)->first();
+
+        // Batch GAGAL tidak mengunci fail — guna semula baris sama (patuh
+        // UNIQUE uq_ps_hash): reset ke UPLOADED, buang baris/fail lama, dispatch semula.
+        if ($wujud && $wujud->status === 'GAGAL') {
+            return $this->cubaSemula($wujud, $fail, $masjidId);
+        }
         if ($wujud) {
             throw new InvalidArgumentException('Penyata ini telah dimuat naik sebelum ini (batch #'.$wujud->id.').');
         }
 
-        $ext = strtolower($fail->getClientOriginalExtension() ?: 'bin');
+        $ext = $this->extDariMime($fail);
 
         $batch = DB::transaction(function () use ($bank, $fail, $hash, $ext, $masjidId) {
             $batch = PenyataSemakan::create([
@@ -82,6 +104,51 @@ class SemakPenyataService
         return $batch;
     }
 
+    /** Muat naik semula fail yang batch-nya GAGAL — guna semula rekod (kuota dikira semula). */
+    private function cubaSemula(PenyataSemakan $batch, UploadedFile $fail, int $masjidId): PenyataSemakan
+    {
+        DB::transaction(function () use ($batch, $fail, $masjidId) {
+            // Buang baris separa (jika ada) + fail lama supaya proses bermula bersih.
+            $batch->baris()->delete();
+            if ($batch->file_path && Storage::disk('local')->exists($batch->file_path)) {
+                Storage::disk('local')->delete($batch->file_path);
+            }
+
+            $path = 'penyata-ai/'.$masjidId.'/'.$batch->id.'.'.$this->extDariMime($fail);
+            Storage::disk('local')->put($path, file_get_contents($fail->getRealPath()));
+
+            $batch->update([
+                'status' => 'UPLOADED',
+                'file_path' => $path,
+                'original_name' => mb_substr($fail->getClientOriginalName(), 0, 200),
+                'mime' => $fail->getMimeType() ?: 'application/octet-stream',
+                'error_text' => null,
+                'bil_baris' => 0,
+                'bil_auto_padan' => 0,
+                'tokens_used' => null,
+                'cost_usd' => null,
+                'uploaded_by' => app()->bound('current.user_id') ? app('current.user_id') : null,
+            ]);
+        });
+
+        $this->audit->log('UPDATE', 'penyata_semakan', ['status' => 'GAGAL'],
+            ['status' => 'UPLOADED', 'nota' => 'cuba semula selepas gagal'], $batch->id);
+
+        ProsesPenyataAi::dispatch($batch->id);
+
+        return $batch->fresh();
+    }
+
+    /** Sambungan fail daripada mime yang DISAHKAN kandungan (bukan nama klien). */
+    private function extDariMime(UploadedFile $fail): string
+    {
+        return match ($fail->getMimeType()) {
+            'application/pdf' => 'pdf',
+            'image/png' => 'png',
+            default => 'jpg',
+        };
+    }
+
     /**
      * Rekod satu baris penyata → catat kutipan (masuk) / belanja (keluar).
      * Pulangkan ['jenis','recno','voucher_id'].
@@ -101,7 +168,27 @@ class SemakPenyataService
             throw new InvalidArgumentException('Sila pilih kod akaun (COA).');
         }
 
+        // Kuatkuasa keluarga COA di PELAYAN (UI hanya panduan): wang masuk =
+        // hasil 400/450 atau tabung liabiliti 300-04; keluar = belanja 600/650.
+        // Tanpa ini, jurnal tetap seimbang tetapi Untung Rugi jadi salah kelas.
+        $kod = (string) \App\Models\Coa::whereKey($coaId)->value('kod');
+        $sah = $masuk
+            ? (str_starts_with($kod, '400-') || str_starts_with($kod, '450-') || str_starts_with($kod, '300-04'))
+            : (str_starts_with($kod, '600-') || str_starts_with($kod, '650-'));
+        if (!$sah) {
+            throw new InvalidArgumentException($masuk
+                ? 'Wang masuk mesti direkod ke kod hasil (400/450) atau tabung (300-04xxx).'
+                : 'Wang keluar mesti direkod ke kod belanja (600/650).');
+        }
+
         return DB::transaction(function () use ($line, $data, $masuk, $jenis, $jumlah, $tarikh, $coaId) {
+            // Kunci baris & semak semula status DALAM transaksi — halang klik
+            // berganda / dua tab merekod baris sama dua kali (jurnal berganda).
+            $terkini = BankStatementLine::whereKey($line->id)->lockForUpdate()->first();
+            if (!$terkini || $terkini->status !== 'UNMATCHED') {
+                throw new InvalidArgumentException('Baris ini telah pun direkod atau diabaikan.');
+            }
+
             if ($masuk) {
                 $rekod = $this->kutipan->create([
                     'jenis' => 'BIASA',

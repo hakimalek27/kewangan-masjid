@@ -71,9 +71,11 @@ class SemakPenyataController extends Controller
             $laporan = $this->recon->laporan((int) $batch->bank_account_id);
         }
 
-        // Pilihan COA untuk modal Rekod (hasil + belanja postable).
+        // Pilihan COA untuk modal Rekod: wang masuk = hasil (400/450) ATAU
+        // tabung khusus liabiliti (300-04xxx — sah sebagai Cr kutipan); keluar = belanja.
         $coaHasil = Coa::query()->where('is_header', 0)->where('is_active', 1)
-            ->where(fn ($q) => $q->where('kod', 'like', '400-%')->orWhere('kod', 'like', '450-%'))
+            ->where(fn ($q) => $q->where('kod', 'like', '400-%')->orWhere('kod', 'like', '450-%')
+                ->orWhere('kod', 'like', '300-04%'))
             ->orderBy('kod')->get(['id', 'kod', 'nama']);
         $coaBelanja = Coa::query()->where('is_header', 0)->where('is_active', 1)
             ->where(fn ($q) => $q->where('kod', 'like', '600-%')->orWhere('kod', 'like', '650-%'))

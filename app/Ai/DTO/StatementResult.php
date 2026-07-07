@@ -13,7 +13,6 @@ class StatementResult
     public array $lines = [];
     public string $rawJson = '';
     public ?int $tokensUsed = null;
-    public bool $terpotong = false;
 
     public static function fromJson(string $teks): self
     {
