@@ -2,9 +2,10 @@
 > Nota serah tugas ringkas. Sejarah PENUH: `../spm-explore/SEJARAH-KERJA.md` (§7o–§7r terkini).
 > Laporan audit: `LAPORAN-AUDIT-MENYELURUH-20260702.md` · Pelan: `PELAN-PEMBAIKAN-AUDIT-20260702.md`.
 
-## Keadaan semasa (8 Jul 2026, selepas semakan audit 3-ejen)
+## Keadaan semasa (8 Jul 2026, selepas semakan audit 3-ejen + audit peranan sebenar)
 - **Cabang aktif:** `fix/audit-20260702` (belum merge ke main). Remote: github hakimalek27/kewangan-masjid.
-- **Ujian:** 284/284 PHPUnit + 7/7 Playwright E2E LULUS. DB `spkm` verify-balance 3778 + audit-chain 9 OK.
+- **Ujian:** 284/284 PHPUnit + 15/15 Playwright (isolation 3 + smoke-crawl 4 + **role-audit 8 BAHARU**). DB `spkm` verify-balance 3778 + audit-chain 9 OK.
+- **Audit peranan sebenar (browser) SIAP:** 4 akaun disahkan satu-satu — superadmin (tulis sebenar + ADMIN_OVERRIDE + tukar masjid), pentadbir (tiada kewangan), bendahari (tulis sebenar), viewer (penyata + masjid di-assign sahaja). **REKALIBRASI TALLY:** klon ujian lama BASI (void resit 1851 tiada) — klon di-reset dari prod + 9 nilai ujian dikemas ke kebenaran prod (BS 174,589.95 dsb.). ⚠️ Klon ujian WAJIB di-reset dari `spkm` selepas sebarang pembetulan data prod.
 - **Semakan audit 3-ejen (8 Jul petang) SIAP:** semua penemuan dibaiki — K1 jurnal berganda dua-klik (lockForUpdate), K2 GAGAL kunci fail (guna semula batch), K3 duplikat sah digugurkan (dedup pra-kira), S1–S9 (COA keluarga di pelayan, race kuota, retry, tarikh AI, MATCHED tak boleh abai, butang admin Tanda GAGAL, jenis ikut tanda, arahan queue go-live). +5 ujian baharu. ⚠️ E2E perlu SATU serve sahaja di port 8123 (proses bertindih = ujian tembak DB salah) + seed `bdh_browser_b` ikut tests-e2e/README.md.
 - **Audit end-to-end + pembaikan F0–F7 SIAP** (6 sektor). **+ 3 kerja baharu (8 Jul):** penjenamaan SPKM, superadmin akses penuh, ciri Semak Penyata (AI).
 
