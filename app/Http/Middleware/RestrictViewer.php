@@ -8,8 +8,9 @@ use Illuminate\Http\Request;
 
 /**
  * Pagar peranan BACA-SAHAJA (deny-by-default) merentas seluruh kumpulan auth+masjid:
- *  • Pemerhati (viewer) = PENYATA SAHAJA — halaman BACA lain dialih ke penyata bulanan,
- *    semua TULIS → 403.
+ *  • Pemerhati (viewer — JAWI/MAIWP pantau masjid seliaan) = LAPORAN SAHAJA:
+ *    penyata + laporan perakaunan + statistik (baca); halaman lain dialih ke
+ *    penyata bulanan, semua TULIS → 403.
  *  • Juruaudit = BACA penuh (tiada alih), tetapi semua TULIS → 403 walaupun route tiada
  *    gate role: (pagar bakap supaya sebarang POST baharu tidak sengaja boleh ditulis
  *    juruaudit — selari dgn sekatan tulis RoleMiddleware yang hanya berfungsi pada route
@@ -18,11 +19,19 @@ use Illuminate\Http\Request;
  */
 class RestrictViewer
 {
-    /** Laluan yang DIBENARKAN untuk pemerhati. */
+    /** Laluan yang DIBENARKAN untuk pemerhati (semua BACA sahaja). */
     private const DIBENARKAN = [
-        'penyata.bulanan', 'penyata.bank', 'penyata.tahunan', // penyata + cetak/PDF (route sama, ?format=pdf)
+        // Penyata (+ cetak/PDF — route sama, ?format=pdf)
+        'penyata.bulanan', 'penyata.bank', 'penyata.tahunan',
+        // Laporan perakaunan penuh (keputusan 8 Jul 2026 — pemantauan JAWI/MAIWP)
+        'akaun.untungrugi', 'akaun.kunci', 'akaun.imbangan',
+        'akaun.lejer', 'akaun.lejerakaun', 'akaun.program',
+        // Statistik (baca)
+        'statistik.kutipan', 'statistik.kutipan_coa', 'statistik.belanja',
+        'statistik.belanja_coa', 'statistik.jumaat',
+        // Akaun sendiri
         'masjid.tukar', 'logout', 'bahasa',
-        'tetapan.katalaluan', 'tetapan.katalaluan.kemaskini', // tukar kata laluan sendiri
+        'tetapan.katalaluan', 'tetapan.katalaluan.kemaskini',
     ];
 
     public function handle(Request $request, Closure $next)

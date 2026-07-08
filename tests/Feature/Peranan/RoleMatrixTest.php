@@ -118,4 +118,42 @@ class RoleMatrixTest extends TestCase
         // Boleh edit info masjid (bendahari+setiausaha) — bukan 403.
         $this->assertNotSame(403, $this->actingAs($su)->post(route('tetapan.masjid.kemaskini'), [])->status());
     }
+
+    /** Model SaaS (8 Jul 2026): viewer (JAWI/MAIWP) = penyata + laporan + statistik, BACA sahaja. */
+    public function test_viewer_laporan_penuh_baca_sahaja(): void
+    {
+        $v = $this->buat('viewer');
+
+        // BOLEH baca: penyata + laporan perakaunan + statistik.
+        foreach (['penyata.bulanan', 'akaun.untungrugi', 'akaun.kunci', 'akaun.imbangan',
+                  'akaun.lejer', 'akaun.program', 'statistik.kutipan', 'statistik.belanja'] as $rt) {
+            $this->actingAs($v)->get(route($rt))->assertOk();
+        }
+
+        // Halaman BUKAN-laporan → dialih ke penyata (deny-by-default).
+        $this->actingAs($v)->get(route('kutipan.senarai'))->assertRedirect(route('penyata.bulanan'));
+        $this->actingAs($v)->get(route('dashboard'))->assertRedirect(route('penyata.bulanan'));
+
+        // Sifar tulis.
+        $this->actingAs($v)->post(route('kutipan.simpan'), [])->assertForbidden();
+    }
+
+    /** Model SaaS: peranan legasi (pentadbir/pengerusi/setiausaha) tidak lagi ditawarkan untuk akaun BAHARU. */
+    public function test_peranan_legasi_tidak_ditawarkan_akaun_baharu(): void
+    {
+        $admin = $this->buat('admin');
+
+        foreach (['pentadbir', 'pengerusi', 'setiausaha'] as $legasi) {
+            $this->actingAs($admin)->post(route('tetapan.pengguna.simpan'), [
+                'login' => 'lg_'.uniqid(), 'nama_penuh' => 'Legasi', 'role' => $legasi,
+                'masjid_id' => config('spkm.masjid_id'), 'kata_laluan' => 'rahsia123',
+            ])->assertSessionHasErrors('role');
+        }
+
+        // Peranan ditawarkan MASIH boleh dicipta.
+        $this->actingAs($admin)->post(route('tetapan.pengguna.simpan'), [
+            'login' => 'ok_'.uniqid(), 'nama_penuh' => 'Juruaudit Baharu', 'role' => 'juruaudit',
+            'masjid_id' => config('spkm.masjid_id'), 'kata_laluan' => 'rahsia123',
+        ])->assertSessionHasNoErrors();
+    }
 }

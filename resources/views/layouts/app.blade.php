@@ -65,7 +65,14 @@
             @endphp
             @php
                 $peranan = auth()->user()?->role?->value;
-                $viewerRoutes = ['penyata.bulanan', 'penyata.bank', 'penyata.tahunan'];
+                // Pemerhati (JAWI/MAIWP): penyata + laporan perakaunan + statistik — baca sahaja.
+                $viewerRoutes = [
+                    'penyata.bulanan', 'penyata.bank', 'penyata.tahunan',
+                    'akaun.untungrugi', 'akaun.kunci', 'akaun.imbangan',
+                    'akaun.lejer', 'akaun.lejerakaun', 'akaun.program',
+                    'statistik.kutipan', 'statistik.kutipan_coa', 'statistik.belanja',
+                    'statistik.belanja_coa', 'statistik.jumaat',
+                ];
                 // Item menu DIHADKAN ikut peranan (route sistem/khas). Item lain → semua boleh lihat.
                 $menuHad = [
                     'admin.pemantauan'  => ['admin'],

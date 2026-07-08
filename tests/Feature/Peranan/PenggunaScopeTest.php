@@ -55,7 +55,7 @@ class PenggunaScopeTest extends TestCase
     {
         return array_merge([
             'login' => 'baru_'.uniqid(), 'nama_penuh' => 'Pengguna Baru',
-            'role' => 'setiausaha', 'masjid_id' => $this->home, 'kata_laluan' => 'rahsia123', 'is_active' => '1',
+            'role' => 'juruaudit', 'masjid_id' => $this->home, 'kata_laluan' => 'rahsia123', 'is_active' => '1',
         ], $ubah);
     }
 
@@ -72,13 +72,13 @@ class PenggunaScopeTest extends TestCase
         $login = 'su_'.uniqid();
         // Cuba hantar masjid_id = B → controller PAKSA ke masjid semasa (49)
         $this->actingAs($this->bendahari)->post(route('tetapan.pengguna.simpan'),
-            $this->borang(['login' => $login, 'role' => 'setiausaha', 'masjid_id' => $this->masjidB]))
+            $this->borang(['login' => $login, 'role' => 'juruaudit', 'masjid_id' => $this->masjidB]))
             ->assertRedirect(route('tetapan.pengguna'))->assertSessionHasNoErrors();
 
         $baru = AppUser::where('login', $login)->first();
         $this->assertNotNull($baru);
         $this->assertSame($this->home, (int) $baru->masjid_id); // dipaksa ke masjid sendiri
-        $this->assertSame('setiausaha', $baru->role->value);
+        $this->assertSame('juruaudit', $baru->role->value);
     }
 
     public function test_bendahari_tak_boleh_lantik_admin(): void

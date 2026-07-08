@@ -186,18 +186,20 @@ test('BENDAHARI: kewangan penuh + Semak Penyata; TIADA halaman sistem', async ({
 
 /* ================================================================== VIEWER */
 
-test('VIEWER: penyata SAHAJA + hanya masjid yang di-assign superadmin', async ({ page }) => {
+test('VIEWER: laporan SAHAJA (baca) + hanya masjid yang di-assign superadmin', async ({ page }) => {
   await login(page, ACC.viewer)
   await expect(page).toHaveURL(/\/penyata\/bulanan/) // landing = penyata
 
-  // Halaman lain DIALIH ke penyata (deny-by-default viewer.guard)
-  for (const p of ['/dashboard', '/kutipan/senarai', '/belanja', '/semak-penyata', '/akaun/untung-rugi']) {
+  // Halaman BUKAN-laporan DIALIH ke penyata (deny-by-default viewer.guard)
+  for (const p of ['/dashboard', '/kutipan/senarai', '/belanja', '/semak-penyata', '/bank', '/tetapan/pengguna']) {
     await page.goto(p, { waitUntil: 'domcontentloaded' })
     await expect(page, `${p} mesti dialih ke penyata`).toHaveURL(/\/penyata\/bulanan/)
   }
 
-  // Penyata dibenarkan: bulanan/bank/tahunan (200)
-  for (const p of ['/penyata/bulanan', '/penyata/bank', '/penyata/tahunan']) {
+  // Dibenarkan BACA: penyata + laporan perakaunan + statistik (model SaaS — JAWI/MAIWP)
+  for (const p of ['/penyata/bulanan', '/penyata/bank', '/penyata/tahunan',
+                   '/akaun/untung-rugi', '/akaun/kunci-kira-kira', '/akaun/imbangan-duga',
+                   '/akaun/lejer', '/akaun/program', '/statistik/kutipan', '/statistik/belanja']) {
     expect((await page.request.get(p)).status(), p).toBe(200)
   }
 

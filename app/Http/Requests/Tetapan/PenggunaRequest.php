@@ -46,14 +46,27 @@ class PenggunaRequest extends BaseFormRequest
         ];
     }
 
-    /** Peranan yang pemohon dibenarkan melantik (bukan-admin tidak boleh 'admin'). */
+    /**
+     * Peranan yang pemohon dibenarkan melantik — model SaaS: hanya peranan
+     * DITAWARKAN (admin/bendahari/juruaudit/viewer; bukan-admin tanpa 'admin').
+     * Semasa EDIT, peranan LEGASI semasa akaun itu turut diterima supaya
+     * akaun lama (pentadbir/pengerusi/setiausaha) boleh dikemas kini tanpa
+     * dipaksa tukar peranan.
+     */
     private function perananDibenarkan(): array
     {
         $cases = $this->user()?->isAdmin()
-            ? UserRole::cases()
-            : array_filter(UserRole::cases(), fn (UserRole $r) => $r !== UserRole::ADMIN);
+            ? UserRole::ditawarkan()
+            : array_filter(UserRole::ditawarkan(), fn (UserRole $r) => $r !== UserRole::ADMIN);
 
-        return array_map(fn (UserRole $r) => $r->value, $cases);
+        $nilai = array_map(fn (UserRole $r) => $r->value, $cases);
+
+        $sediaAda = $this->route('pengguna')?->role?->value;
+        if ($sediaAda !== null && ! in_array($sediaAda, $nilai, true)) {
+            $nilai[] = $sediaAda;
+        }
+
+        return $nilai;
     }
 
     public function attributes(): array

@@ -70,7 +70,7 @@ class PenggunaController extends Controller
 
         return view('tetapan.pengguna-edit', [
             'pengguna' => $pengguna,
-            'roles'    => $this->peranan($isAdmin),
+            'roles'    => $this->peranan($isAdmin, $pengguna->role),
             'masjids'  => $this->masjidPilihan($isAdmin, (int) app('current.masjid_id')),
             'ditugas'  => $pengguna->masjids->pluck('id')->all(),
         ]);
@@ -107,12 +107,22 @@ class PenggunaController extends Controller
         return redirect()->route('tetapan.pengguna')->with('success', 'Pengguna berjaya dikemaskini');
     }
 
-    /** Peranan boleh dilantik: admin = semua; bukan-admin = tanpa 'admin'. */
-    private function peranan(bool $isAdmin): array
+    /**
+     * Peranan boleh dilantik (model SaaS): admin = ditawarkan(); bukan-admin = tanpa 'admin'.
+     * Peranan LEGASI pengguna sedia ada (pentadbir/pengerusi/setiausaha) dikekalkan
+     * dalam dropdown semasa EDIT supaya akaun lama tidak dipaksa tukar peranan.
+     */
+    private function peranan(bool $isAdmin, ?UserRole $sediaAda = null): array
     {
-        return $isAdmin
-            ? UserRole::cases()
-            : array_values(array_filter(UserRole::cases(), fn (UserRole $r) => $r !== UserRole::ADMIN));
+        $senarai = $isAdmin
+            ? UserRole::ditawarkan()
+            : array_values(array_filter(UserRole::ditawarkan(), fn (UserRole $r) => $r !== UserRole::ADMIN));
+
+        if ($sediaAda !== null && ! in_array($sediaAda, $senarai, true)) {
+            $senarai[] = $sediaAda; // peranan legasi akaun ini — kekal boleh dipilih semula
+        }
+
+        return $senarai;
     }
 
     /** Senarai masjid dropdown: admin = semua; bukan-admin = masjid sendiri sahaja. */
