@@ -101,9 +101,11 @@ class SemakPenyataController extends Controller
     /** Muat naik penyata (PDF/imej) → dispatch job AI. */
     public function muatNaik(Request $request): RedirectResponse
     {
+        // Provider AI ditetapkan oleh SUPERADMIN untuk semua tenant (profil Default) —
+        // tenant tidak memilih; muatNaik() akan guna provider Default aktif.
         $data = $request->validate([
             'bank_account_id' => ['required', 'integer', MasjidRule::exists('bank_account')],
-            'fail' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'fail' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:102400'], // 100 MB
         ], [], ['bank_account_id' => 'Bank', 'fail' => 'Fail Penyata']);
 
         try {
@@ -160,6 +162,37 @@ class SemakPenyataController extends Controller
 
         return redirect()->route('semakpenyata.index', ['batch' => $line->batch_id])
             ->with('success', "Baris penyata #{$line->id} direkod ({$rujukan}).");
+    }
+
+    /** Rekod beberapa baris sebagai SATU rekod lump-sum (longgok infaq QR dll). */
+    public function rekodLumpSum(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'line_ids' => ['required', 'array', 'min:2'],
+            'line_ids.*' => ['integer'],
+            'coa_id' => ['required', 'integer', MasjidRule::exists('coa')],
+            'tarikh' => ['required', 'date'],
+            'penerima' => ['nullable', 'string', 'max:200'],
+            'deskripsi' => ['nullable', 'string', 'max:500'],
+            'batch' => ['nullable', 'integer'],
+        ], [], ['coa_id' => 'Kod Akaun', 'line_ids' => 'Baris', 'tarikh' => 'Tarikh']);
+
+        // Sahkan setiap baris milik masjid semasa (batch berskop) — anti IDOR.
+        foreach ($data['line_ids'] as $id) {
+            $line = BankStatementLine::find((int) $id);
+            abort_unless($line && $line->batch_id && PenyataSemakan::whereKey($line->batch_id)->exists(), 404);
+        }
+
+        try {
+            $r = $this->servis->rekodLumpSum($data['line_ids'], $data);
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['rekod' => $e->getMessage()]);
+        }
+
+        $ruj = $r['jenis'] === 'KUTIPAN' ? 'resit #'.$r['recno'] : 'baucer #'.$r['recno'];
+
+        return redirect()->route('semakpenyata.index', ['batch' => $data['batch'] ?? null])
+            ->with('success', "{$r['bil']} baris dilonggok jadi 1 rekod RM{$r['jumlah']} ({$ruj}).");
     }
 
     /** Abai satu baris. */

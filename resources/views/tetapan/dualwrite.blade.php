@@ -10,12 +10,12 @@
                 <div class="card-header fw-bold"><i class="bi bi-toggles me-1"></i>{{ __('Tetapan Dual-Write') }}</div>
                 <div class="card-body">
                     <p class="small text-muted">
-                        {{ __('Apabila DIHIDUPKAN, setiap') }} <strong>{{ __('kutipan/pembayaran baharu') }}</strong> {{ __('dalam sistem ini turut dihantar ke borang SPPKMS lama') }}
-                        (<code>{{ $legacyUrl }}</code>) —
+                        {{ __('Apabila DIHIDUPKAN, setiap') }} <strong>{{ __('kutipan/pembayaran baharu') }}</strong> {{ __('masjid ini turut dihantar ke borang SPPKMS lama') }}
+                        (<code>{{ $legacyUrl }}</code>) {{ __('di bawah akaun SPPKMS masjid ini') }} —
                         {{ __('jambatan sementara semasa tempoh peralihan.') }}
                     </p>
 
-                    <form method="POST" action="{{ route('admin.dualwrite.toggle') }}">
+                    <form method="POST" action="{{ route('tetapan.dualwrite.toggle') }}">
                         @csrf
                         <input type="hidden" name="aktif" value="{{ $aktif ? 0 : 1 }}">
                         <div class="d-flex align-items-center gap-2 mb-3">
@@ -41,7 +41,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header fw-bold"><i class="bi bi-key me-1"></i>{{ __('Kredensial SPPKMS Lama') }}</div>
                 <div class="card-body">
-                    <form method="POST" action="{{ route('admin.dualwrite.kredensial') }}">
+                    <form method="POST" action="{{ route('tetapan.dualwrite.kredensial') }}">
                         @csrf
                         <div class="mb-3">
                             <label class="form-label" for="sppkms_login">{{ __('Login') }}</label>
@@ -78,7 +78,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header fw-bold d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-arrow-left-right me-1"></i>{{ __('Status Penghantaran') }}</span>
-                    <form method="POST" action="{{ route('admin.dualwrite.tertunggak') }}" class="d-inline">
+                    <form method="POST" action="{{ route('tetapan.dualwrite.tertunggak') }}" class="d-inline">
                         @csrf
                         <button type="submit" class="btn btn-sm btn-outline-primary"
                                 {{ ($statistik['PENDING'] ?? 0) ? '' : 'disabled' }}>
@@ -91,7 +91,7 @@
                     <div class="row g-2 mb-3">
                         @foreach (['PENDING' => 'warning', 'DONE' => 'success', 'FAILED' => 'danger', 'SKIPPED' => 'secondary'] as $st => $warna)
                             <div class="col-6 col-md-3">
-                                <a href="{{ route('admin.dualwrite', ['status' => $st]) }}" class="text-decoration-none">
+                                <a href="{{ route('tetapan.dualwrite', ['status' => $st]) }}" class="text-decoration-none">
                                     <div class="border rounded p-2 text-center {{ $tapis === $st ? 'border-'.$warna : '' }}">
                                         <div class="fs-4 fw-bold text-{{ $warna }}">{{ $statistik[$st] ?? 0 }}</div>
                                         <small class="text-muted">{{ $st }}</small>
@@ -103,7 +103,7 @@
 
                     @if ($tapis)
                         <div class="mb-2">
-                            <a href="{{ route('admin.dualwrite') }}" class="btn btn-sm btn-outline-secondary">
+                            <a href="{{ route('tetapan.dualwrite') }}" class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-x-circle me-1"></i>{{ __('Buang penapis:') }} {{ $tapis }}
                             </a>
                         </div>
@@ -134,7 +134,7 @@
                                         <td><small class="text-danger">{{ \Illuminate\Support\Str::limit($sync->last_error, 80) ?: '—' }}</small></td>
                                         <td>
                                             @if ($sync->status === 'FAILED')
-                                                <form method="POST" action="{{ route('admin.dualwrite.retry', $sync) }}">
+                                                <form method="POST" action="{{ route('tetapan.dualwrite.retry', $sync) }}">
                                                     @csrf
                                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                                         <i class="bi bi-arrow-clockwise"></i> {{ __('Cuba Semula') }}

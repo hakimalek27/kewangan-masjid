@@ -10,8 +10,9 @@ use Tests\Concerns\MasjidContext;
 use Tests\TestCase;
 
 /**
- * Pengurusan pengguna ber-skop: BENDAHARI hanya urus pengguna masjid SENDIRI dan
- * TIDAK boleh melantik/mengubah akaun 'admin'; ADMIN = semua masjid, mana-mana peranan.
+ * Pengurusan pengguna = SUPERADMIN (penyedia) SAHAJA. Bendahari/pentadbir tenant
+ * DISEKAT (403) daripada semua laluan urus-pengguna (pagar route `role:admin`).
+ * ADMIN = semua masjid, mana-mana peranan bukan-legasi.
  */
 class PenggunaScopeTest extends TestCase
 {
@@ -59,34 +60,28 @@ class PenggunaScopeTest extends TestCase
         ], $ubah);
     }
 
-    public function test_bendahari_lihat_pengguna_masjid_sendiri_sahaja(): void
+    public function test_bendahari_disekat_lihat_pengurusan_pengguna(): void
     {
-        $resp = $this->actingAs($this->bendahari)->get(route('tetapan.pengguna'));
-        $resp->assertOk();
-        $resp->assertSee($this->bendahari->login);
-        $resp->assertDontSee($this->userB->login); // pengguna masjid B tidak kelihatan
+        // Urus pengguna kini PENYEDIA (admin) sahaja → bendahari tenant disekat (403).
+        $this->actingAs($this->bendahari)->get(route('tetapan.pengguna'))->assertForbidden();
     }
 
-    public function test_bendahari_cipta_pengguna_dipaksa_masjid_sendiri(): void
+    public function test_bendahari_disekat_cipta_pengguna(): void
     {
         $login = 'su_'.uniqid();
-        // Cuba hantar masjid_id = B → controller PAKSA ke masjid semasa (49)
         $this->actingAs($this->bendahari)->post(route('tetapan.pengguna.simpan'),
             $this->borang(['login' => $login, 'role' => 'juruaudit', 'masjid_id' => $this->masjidB]))
-            ->assertRedirect(route('tetapan.pengguna'))->assertSessionHasNoErrors();
+            ->assertForbidden();
 
-        $baru = AppUser::where('login', $login)->first();
-        $this->assertNotNull($baru);
-        $this->assertSame($this->home, (int) $baru->masjid_id); // dipaksa ke masjid sendiri
-        $this->assertSame('juruaudit', $baru->role->value);
+        $this->assertNull(AppUser::where('login', $login)->first()); // tiada dicipta
     }
 
-    public function test_bendahari_tak_boleh_lantik_admin(): void
+    public function test_bendahari_disekat_walau_cuba_lantik_admin(): void
     {
         $login = 'x_'.uniqid();
         $this->actingAs($this->bendahari)->post(route('tetapan.pengguna.simpan'),
             $this->borang(['login' => $login, 'role' => 'admin']))
-            ->assertSessionHasErrors('role');
+            ->assertForbidden();
         $this->assertNull(AppUser::where('login', $login)->first());
     }
 

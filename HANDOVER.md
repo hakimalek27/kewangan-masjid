@@ -2,6 +2,27 @@
 > Nota serah tugas ringkas. Sejarah PENUH: `../spm-explore/SEJARAH-KERJA.md` (§7o–§7r terkini).
 > Laporan audit: `LAPORAN-AUDIT-MENYELURUH-20260702.md` · Pelan: `PELAN-PEMBAIKAN-AUDIT-20260702.md`.
 
+## ⭐ KEMAS KINI 8 Jul (malam) — Semak Penyata AI: pipeline PDF imbasan + lump-sum (299/299 PHPUnit)
+- **Punca "PDF tak baca penuh":** penyata bank sebenar = PDF **IMBASAN 72 muka** (scan, tiada teks). Provider vision baca muka pertama sahaja → 9–11 rekod + tarikh salah.
+- **Pipeline pecah-muka:** pasang **Poppler** (winget `oschwartz10612.Poppler`; config `spkm.poppler_bin`). `PdfRenderService` (pdftoppm) → `ProsesPenyataAi::ekstrakBaris()` render setiap muka JPG → OCR satu-satu → gabung (tahan-ralat per-muka; job timeout 1800s). Guna imej per-muka (image_url) → mana-mana provider vision boleh.
+- **Prompt tarikh dibaiki:** guna tarikh SEBENAR penyata (bukan hari ini); DD/MM/YY→YYYY-MM-DD (24=2024); deskripsi tak campur tarikh; abai B/F.
+- **Multi-provider (dropdown):** `sp_provider` (jadual) + katalog `config('spkm.ai_provider_catalog')` (OpenAI/OpenRouter/DeepSeek/Ollama/Groq/Mistral/Custom); `/admin/semak-penyata` dropdown auto-isi base_url+model. **ADMIN set Default untuk SEMUA tenant** (tenant TIDAK pilih; upload sahaja). Fallback legasi `sp_ai_*`.
+- **LUMP-SUM:** `SemakPenyataService::rekodLumpSum` + route `semakpenyata.lumpsum` + checkbox/bar/modal di view. Longgok banyak baris QR kecil sama-sisi jadi 1 rekod (infaq). Sekat sisi bercampur; kuatkuasa keluarga COA.
+- **Had fail 100MB** (php.ini 100M/110M/512M) + **SSL fix** (curl.cainfo/openssl.cafile → `C:/Users/hakim/cacert.pem`; punca cURL error 60). `putFileAs` streaming.
+- Baki: POPPLER_BIN boleh override via env utk environment lain; produksi Linux letak poppler di PATH.
+
+## ⭐ KEMAS KINI 8 Jul (petang lewat #2) — 3 kerja SaaS tambahan SIAP (296/296 PHPUnit)
+1. **Jenama mod penyedia:** sidebar/footer superadmin (mod penyedia) papar **SPKM / "Konsol Penyedia"**, bukan nama tenant (composer `$modProvider` + `layouts/app.blade.php`).
+2. **Semak Penyata AI multi-provider:** superadmin simpan beberapa **profil provider** (OpenAI/DeepSeek/Ollama/OpenRouter — semua serasi-OpenAI) di `/admin/semak-penyata`; bendahari **pilih provider dropdown semasa upload** untuk banding OCR (jadual `sp_provider` + `penyata_semakan.sp_provider_id`; dedup kini per-provider). Config lama `sp_ai_*` kekal fallback. Model mesti sokong VISION. **Timeout upload 30s dibaiki** (`set_time_limit` dlm `ProsesPenyataAi` + worker `ai` mesti hidup).
+3. **Dual-write per-tenant:** dipindah dari admin → **tetapan tenant** (`/tetapan/dual-write`, `role:bendahari,pentadbir`); setiap masjid isi login SPPKMS SENDIRI + toggle (Setting per masjid_id). Admin TIDAK lagi urus dual-write. Route/controller/view/menu lama `admin.dualwrite*` DIBUANG.
+
+## ⭐ KEMAS KINI 8 Jul (petang lewat) — model peranan diperketat + pemisahan penyedia
+Superadmin bukan lagi "akses penuh tulis" — kini **PENYEDIA baca-sahaja** (tiada tulis kewangan/tetapan tenant); **urus pengguna dipindah ke superadmin sahaja**. **DAN pemisahan penyedia-vs-tenant penuh:**
+- **Mod PENYEDIA** (superadmin baru login, belum "Masuk" masjid): mendarat Konsol Sistem; sidebar tunjuk fungsi SISTEM sahaja (Pentadbiran, Urus Pengguna, Tetapan AI/API); menu + halaman KEWANGAN tenant tersembunyi/dialih ke Konsol. Middleware baharu `RestrictAdminProvider` (alias `admin.provider`).
+- **Mod DALAM-TENANT** (selepas klik "Masuk" masjid di Konsol → `masjid.tukar`): boleh BACA kewangan masjid itu (tulis tetap 403); banner "Mod Lihat" + butang "Kembali ke Konsol" (`masjid.keluar` padam `selected_masjid_id`). Penukar masjid topbar hanya papar dalam mod ini.
+- Isyarat mod: kehadiran `session('selected_masjid_id')`. Fail: `RestrictAdminProvider.php`, `MasjidSwitchController::keluar`, route `masjid.keluar`, `layouts/app.blade.php` (sidebar), `bootstrap/app.php` (alias).
+**287/287 PHPUnit LULUS** (helper ujian `MasjidContext::adminMasuk`); disahkan manual server langsung (mod penyedia /dashboard→302 /sistem; Masuk→200; Kembali→302). Akaun ujian sementara (5 peranan + Tenant B) telah DIBUANG dari DB `spkm`. e2e role-audit dikemas (belum dijalankan).
+
 ## Keadaan semasa (8 Jul 2026, selepas semakan audit 3-ejen + audit peranan sebenar)
 - **Cabang aktif:** `fix/audit-20260702` (belum merge ke main). Remote: github hakimalek27/kewangan-masjid.
 - **Ujian:** 284/284 PHPUnit + 15/15 Playwright (isolation 3 + smoke-crawl 4 + **role-audit 8 BAHARU**). DB `spkm` verify-balance 3778 + audit-chain 9 OK.
@@ -12,7 +33,8 @@
 
 ## ⭐ Kerja baharu 8 Jul (penjenamaan + superadmin + Semak Penyata AI)
 - **Penjenamaan SPPKMS/SPAKM → SPKM (Sistem Pengurusan Kewangan Masjid):** `config/spkm.php`, `config('spkm.*')`, perintah `spkm:*`, `SPKM_MASJID_ID`, APP_NAME/manifest. **KEKAL** rujukan sistem legasi V1 (dual-write SPPKMS). DB kini `spkm`/`spkm_test`.
-- **Superadmin (role admin) akses PENUH baca+tulis semua tenant:** `RoleMiddleware` pintasan admin + `security_event ADMIN_OVERRIDE` (migrasi `2026_07_08_000001`); `AppUser::bolehTulis*` termasuk admin; menu penuh untuk admin.
+- **Superadmin (role admin) — model DIMUKTAMADKAN semula (8 Jul petang):** PENYEDIA (provider) **baca-sahaja** terhadap kewangan/tetapan tenant. `RoleMiddleware` admin kini lepas hanya **kaedah SELAMAT (GET)** ATAU route yang eksplisit izin `admin`; tulis melalui pagar bukan-admin → **403** (dilog `PERMISSION_DENIED`, bukan lagi `ADMIN_OVERRIDE`). `AppUser::bolehTulis/bolehUrusMasjid/bolehTulisDaftar` **TIDAK** lagi termasuk admin. Admin masih boleh: baca semua tenant, tukar-masjid, konsol/`/admin/*`, onboarding, tetapan API/AI, **urus pengguna**. (Enum `ADMIN_OVERRIDE` kekal dlm DB tetapi tak lagi ditulis.)
+- **Urus pengguna = SUPERADMIN sahaja** (dulu admin+bendahari+pentadbir): route `role:admin`, menu `tetapan.pengguna`→`['admin']`. Bendahari/pentadbir tenant kini 403 (pengasingan tugas — maker tak cipta checker). Ujian dikemas: RoleMatrix/PenggunaScope/PengasinganData + e2e role-audit.
 - **Ciri "Semak Penyata (AI)":** bendahari upload penyata bank (PDF/imej) → AI (kunci OpenAI PUSAT, kawalan superadmin) → 2 jadual (belum/sudah rekod) → klik Rekod = catat kutipan/belanja. Kuota 3/bulan/tenant (superadmin ubah/top-up/ON-OFF di `/admin/semak-penyata`). Jadual `penyata_semakan` + kolum AI pada `bank_statement_line` (migrasi `2026_07_08_000002`). Job `ProsesPenyataAi` (queue `ai`).
 
 ## Apa yang dibaiki (ringkas)

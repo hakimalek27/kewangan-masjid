@@ -34,4 +34,16 @@ class MasjidSwitchController extends Controller
             ? redirect()->route('dashboard')->with('success', 'Masjid aktif ditukar.')
             : redirect()->back()->with('success', 'Masjid aktif ditukar.');
     }
+
+    /**
+     * "Kembali ke Konsol" — superadmin keluar mod dalam-tenant: padam masjid dipilih
+     * supaya kembali ke MOD PENYEDIA (Konsol Sistem, tiada konteks kewangan tenant).
+     */
+    public function keluar(Request $request): RedirectResponse
+    {
+        $request->session()->forget('selected_masjid_id');
+        Masjid::lupakanSemasa();
+
+        return redirect()->route('sistem.console');
+    }
 }

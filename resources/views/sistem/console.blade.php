@@ -94,7 +94,6 @@
         <a href="{{ route('admin.ralat') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bug me-1"></i>{{ __('Log Ralat') }}</a>
         <a href="{{ route('admin.keselamatan') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-shield-lock me-1"></i>{{ __('Keselamatan') }}</a>
         <a href="{{ route('admin.backup') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-cloud-arrow-up me-1"></i>{{ __('Backup') }}@if ($backupTerakhir?->created_at)<span class="small text-muted ms-1">({{ \Illuminate\Support\Carbon::parse($backupTerakhir->created_at)->format('d/m') }})</span>@endif</a>
-        <a href="{{ route('admin.dualwrite') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left-right me-1"></i>{{ __('Dual-Write') }}</a>
         <a href="{{ route('tetapan.pengguna') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-people me-1"></i>{{ __('Pengguna') }}</a>
         <a href="{{ route('tetapan.api') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plug me-1"></i>{{ __('API Awam') }}</a>
         <a href="{{ route('tetapan.ai') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-robot me-1"></i>{{ __('AI & Telegram') }}</a>

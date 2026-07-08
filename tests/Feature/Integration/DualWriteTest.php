@@ -290,23 +290,43 @@ class DualWriteTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    //  (g) Halaman admin: 200 untuk admin, 403 untuk bendahari
+    //  (g) Halaman TENANT: bendahari/pentadbir urus sendiri; juruaudit disekat
     // ------------------------------------------------------------------
 
-    public function test_halaman_admin_dual_write_akses(): void
+    private function buatUser(string $role, ?int $masjidId = null): AppUser
     {
-        Http::fake();
-
-        $buat = fn (string $role) => AppUser::create([
-            'masjid_id' => config('spkm.masjid_id'), 'login' => 'uji_dw_'.$role.'_'.uniqid(),
+        return AppUser::create([
+            'masjid_id' => $masjidId ?? config('spkm.masjid_id'), 'login' => 'uji_dw_'.$role.'_'.uniqid(),
             'nama_penuh' => 'Ujian '.$role, 'role' => $role,
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
+    }
 
-        $this->actingAs($buat('admin'))->get(route('admin.dualwrite'))
+    public function test_halaman_dual_write_tenant_akses(): void
+    {
+        Http::fake();
+
+        // Bendahari & pentadbir masjid ini → urus dual-write sendiri (200).
+        $this->actingAs($this->buatUser('bendahari'))->get(route('tetapan.dualwrite'))
             ->assertOk()
             ->assertSee('Dual-Write SPPKMS', false);
+        $this->assertNotSame(403, $this->actingAs($this->buatUser('pentadbir'))->get(route('tetapan.dualwrite'))->status());
 
-        $this->actingAs($buat('bendahari'))->get(route('admin.dualwrite'))->assertForbidden();
+        // Juruaudit (baca sahaja) → tiada kebenaran urus dual-write (403).
+        $this->actingAs($this->buatUser('juruaudit'))->get(route('tetapan.dualwrite'))->assertForbidden();
+    }
+
+    /** Toggle dual-write mesti BERSKOP masjid pelaku — tenant lain tidak terjejas. */
+    public function test_toggle_dual_write_berskop_masjid_sendiri(): void
+    {
+        Http::fake();
+        $bendahari = $this->buatUser('bendahari');
+        $masjidB = (int) \App\Models\Masjid::create(['nama' => 'DW B '.uniqid()])->id;
+
+        $this->actingAs($bendahari)->post(route('tetapan.dualwrite.toggle'), ['aktif' => 1])
+            ->assertRedirect(route('tetapan.dualwrite'));
+
+        $this->assertTrue(Setting::isOn('dual_write_sppkms', (int) config('spkm.masjid_id')));
+        $this->assertFalse(Setting::isOn('dual_write_sppkms', $masjidB));
     }
 }

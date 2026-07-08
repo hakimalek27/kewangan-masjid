@@ -13,9 +13,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
 /**
- * Pengurusan Pengguna — ADMIN (semua masjid) + BENDAHARI (masjid SENDIRI sahaja).
- * Bendahari: senarai & cipta/edit diskop ke masjid semasa, TIDAK boleh melantik/
- * mengubah akaun 'admin' (anti-IDOR — AppUser tiada skop BelongsToMasjid).
+ * Pengurusan Pengguna — SUPERADMIN (penyedia) SAHAJA (pagar route `role:admin`).
+ * Admin urus akaun mana-mana masjid & mana-mana peranan bukan-legasi.
+ * Nota: cabang bukan-admin (skop masjid sendiri, anti-IDOR akaun admin) DIKEKALKAN
+ * sebagai pertahanan-mendalam sekiranya pagar route diperluas semula kelak;
+ * ia tidak tercapai selagi route dikunci `role:admin`.
  * Pemerhati boleh ditugaskan beberapa masjid (pivot user_masjid).
  */
 class PenggunaController extends Controller

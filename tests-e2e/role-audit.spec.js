@@ -1,7 +1,11 @@
 // Audit peranan MENYELURUH (Chromium) — 4 akaun sebenar, satu demi satu:
-//   SUPERADMIN (admin)    : akses penuh SEMUA tenant — baca+tulis+kawalan sistem
-//   PENTADBIR MASJID      : urus tetapan masjid + pengguna, TIADA kewangan/sistem
-//   BENDAHARI             : kewangan penuh masjid sendiri, TIADA sistem
+//   SUPERADMIN (admin)    : PENYEDIA — mendarat di Konsol Sistem (mod penyedia); menu
+//                           kewangan tenant tersembunyi sehingga "Masuk" sesebuah masjid.
+//                           Selepas Masuk (mod dalam-tenant): baca kewangan tenant SAHAJA
+//                           (tiada tulis); "Kembali ke Konsol" untuk keluar. Urus pengguna
+//                           + kawalan sistem sentiasa boleh.
+//   PENTADBIR MASJID      : urus tetapan masjid; TIADA urus pengguna/kewangan/sistem
+//   BENDAHARI             : kewangan penuh masjid sendiri, TIADA sistem/urus pengguna
 //   VIEWER (pemerhati)    : penyata SAHAJA, hanya masjid yang di-assign
 // Prasyarat (seed ke klon spkm_test — lihat tests-e2e/README.md):
 //   admin/admin12345 · malmutaqqin/alm12345 · pentadbir_uji/uji12345 ·
@@ -62,62 +66,75 @@ async function rekodKutipanTunai(page, jumlah) {
 
 /* ================================================================ SUPERADMIN */
 
-test('SUPERADMIN: landing Konsol Sistem + menu PENUH + penukar masjid', async ({ page }) => {
+/** Admin "Masuk" sesebuah masjid dari Konsol Sistem (mod penyedia → mod dalam-tenant). */
+async function masukMasjid(page, nama) {
+  await page.goto('/sistem', { waitUntil: 'domcontentloaded' })
+  await page.evaluate((n) => {
+    const row = [...document.querySelectorAll('tr')].find(
+      (r) => r.textContent.includes(n) && r.querySelector('form[action$="/masjid/tukar"]'),
+    )
+    row.querySelector('form[action$="/masjid/tukar"] button[type="submit"]').click()
+  }, nama)
+  await page.waitForLoadState('domcontentloaded')
+}
+
+test('SUPERADMIN: landing Konsol Sistem + sidebar PENYEDIA (tiada menu kewangan tenant)', async ({ page }) => {
   await login(page, ACC.admin)
   await expect(page).toHaveURL(/\/sistem/)
   await expect(page.locator('body')).toContainText('Konsol Sistem')
 
-  // Menu penuh: kumpulan kewangan + sistem KEDUA-DUANYA kelihatan (akses penuh)
   const sidebar = page.locator('#sidebar, .sidebar').first()
-  for (const label of ['Penerimaan / Kutipan', 'Perbelanjaan', 'Penyata', 'Lanjutan', 'Pentadbiran', 'Tetapan']) {
-    await expect(sidebar, `menu "${label}" mesti ada untuk superadmin`).toContainText(label)
+  // Mod penyedia: menu SISTEM kelihatan
+  for (const label of ['Pentadbiran', 'Pengurusan Pengguna']) {
+    await expect(sidebar, `menu penyedia "${label}" mesti ada`).toContainText(label)
   }
-
-  // Penukar masjid hadir dengan >= 2 masjid
-  expect(await page.locator('form[action$="/masjid/tukar"]').count()).toBeGreaterThan(1)
-})
-
-test('SUPERADMIN: SEMUA jenis halaman akses 200 (kewangan + tetapan + admin)', async ({ page }) => {
-  test.setTimeout(120000)
-  await login(page, ACC.admin)
-  const halaman = [
-    '/dashboard', '/kutipan/baru', '/kutipan/senarai', '/belanja/baru', '/belanja/senarai',
-    '/akaun/untung-rugi', '/akaun/kunci-kira-kira', '/penyata/bulanan',
-    '/bank', '/tetapan/kawalan', '/tetapan/tutup-tahun', '/tetapan/pengguna', '/tetapan/masjid',
-    '/belanjawan', '/dana', '/rekonsiliasi', '/semak-penyata', '/kelulusan', '/draf',
-    '/sistem', '/admin/pemantauan', '/admin/audit', '/admin/backup', '/admin/semak-penyata',
-    '/tetapan/ai', '/tetapan/api', '/tetapan/masjid-baru',
-  ]
-  const gagal = []
-  for (const p of halaman) {
-    const r = await page.request.get(p)
-    if (r.status() >= 400) gagal.push(`${p} → ${r.status()}`)
+  // Menu KEWANGAN tenant TERSEMBUNYI (mesti "Masuk" masjid dahulu)
+  for (const label of ['Penerimaan / Kutipan', 'Perbelanjaan', 'Penyata Perakaunan']) {
+    await expect(sidebar, `menu kewangan "${label}" tidak sepatutnya ada dlm mod penyedia`).not.toContainText(label)
   }
-  expect(gagal, `Halaman gagal utk superadmin: ${gagal.join(', ')}`).toHaveLength(0)
 })
 
-test('SUPERADMIN: TULIS kewangan sebenar (kutipan) berjaya end-to-end', async ({ page }) => {
+test('SUPERADMIN: mod penyedia — halaman kewangan tenant dialih ke Konsol', async ({ page }) => {
   await login(page, ACC.admin)
-  await rekodKutipanTunai(page, '7.89')
-  await page.goto('/kutipan/senarai', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('body')).toContainText('7.89') // rekod muncul dalam senarai
+  // Laluan kewangan tenant → 302 ke Konsol Sistem (belum "Masuk" masjid)
+  for (const p of ['/dashboard', '/kutipan/baru', '/statistik/kutipan', '/penyata/bulanan']) {
+    const r = await page.request.get(p, { maxRedirects: 0 })
+    expect(r.status(), `${p} mesti dialih (302) dlm mod penyedia`).toBe(302)
+    expect(r.headers()['location']).toContain('/sistem')
+  }
+  // Laluan peringkat-penyedia kekal 200
+  for (const p of ['/sistem', '/tetapan/pengguna', '/admin/pemantauan']) {
+    expect((await page.request.get(p, { maxRedirects: 0 })).status(), p).toBe(200)
+  }
 })
 
-test('SUPERADMIN: tukar masjid → konteks data ikut, dan kembali', async ({ page }) => {
+test('SUPERADMIN: Masuk masjid → BACA kewangan, borang tiada butang tulis, Kembali ke Konsol', async ({ page }) => {
   await login(page, ACC.admin)
-  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
+  await masukMasjid(page, 'AL-MUTTAQIN')
+  await expect(page).toHaveURL(/\/dashboard/)
 
-  // Tukar ke masjid B melalui borang penukar sebenar
-  await page.evaluate((nama) => {
-    const borang = [...document.querySelectorAll('form[action$="/masjid/tukar"]')]
-      .find((f) => f.textContent.includes(nama))
-    borang.querySelector('button[type="submit"]').click()
-  }, MASJID_B)
+  // Mod dalam-tenant: boleh BACA halaman kewangan (200)
+  for (const p of ['/kutipan/senarai', '/penyata/bulanan', '/akaun/untung-rugi']) {
+    expect((await page.request.get(p, { maxRedirects: 0 })).status(), p).toBe(200)
+  }
+  // Borang kutipan DIBACA tetapi TIADA butang tulis (penyedia baca-sahaja; 403 dilindungi PHPUnit)
+  await page.goto('/kutipan/baru', { waitUntil: 'domcontentloaded' })
+  expect(await page.locator('button[type="submit"]', { hasText: 'Simpan Kutipan' }).count()).toBe(0)
+
+  // "Kembali ke Konsol" → mod penyedia semula
+  await page.locator('form[action$="/masjid/keluar"] button[type="submit"]').click()
   await page.waitForLoadState('domcontentloaded')
+  await expect(page).toHaveURL(/\/sistem/)
+  expect((await page.request.get('/dashboard', { maxRedirects: 0 })).status()).toBe(302) // dialih semula
+})
+
+test('SUPERADMIN: dalam mod dalam-tenant — tukar antara masjid, konteks data ikut', async ({ page }) => {
+  await login(page, ACC.admin)
+  await masukMasjid(page, MASJID_B)
   await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('body')).toContainText(MASJID_B) // konteks = masjid B
 
-  // Kembali ke masjid 49
+  // Penukar masjid topbar (kelihatan dlm mod dalam-tenant) → tukar ke AL-MUTTAQIN
   await page.evaluate(() => {
     const borang = [...document.querySelectorAll('form[action$="/masjid/tukar"]')]
       .find((f) => f.textContent.includes('AL-MUTTAQIN'))
@@ -140,12 +157,12 @@ test('SUPERADMIN: kawalan Semak Penyata (AI) — toggle, kunci, kuota semua tena
 
 /* ================================================================ PENTADBIR */
 
-test('PENTADBIR: urus tetapan masjid + pengguna; TIADA kewangan; TIADA sistem', async ({ page }) => {
+test('PENTADBIR: urus tetapan masjid; TIADA urus pengguna; TIADA kewangan; TIADA sistem', async ({ page }) => {
   await login(page, ACC.pentadbir)
   await expect(page).toHaveURL(/\/dashboard/)
 
-  // BOLEH: tetapan masjid, bank, pengguna (200)
-  for (const p of ['/bank', '/tetapan/masjid', '/tetapan/pengguna', '/sewa/senarai', '/peti-besi/senarai']) {
+  // BOLEH: tetapan masjid, bank, daftar bukan-kewangan (200)
+  for (const p of ['/bank', '/tetapan/masjid', '/sewa/senarai', '/peti-besi/senarai']) {
     expect((await page.request.get(p)).status(), p).toBe(200)
   }
 
@@ -153,8 +170,8 @@ test('PENTADBIR: urus tetapan masjid + pengguna; TIADA kewangan; TIADA sistem', 
   await page.goto('/kutipan/baru', { waitUntil: 'domcontentloaded' })
   expect(await page.locator('button[type="submit"]', { hasText: 'Simpan Kutipan' }).count()).toBe(0)
 
-  // TIDAK BOLEH: konsol sistem + halaman admin (403)
-  for (const p of ['/sistem', '/admin/pemantauan', '/admin/backup', '/admin/semak-penyata', '/tetapan/ai', '/tetapan/api', '/tetapan/masjid-baru']) {
+  // TIDAK BOLEH: urus pengguna (kini penyedia sahaja) + konsol sistem + halaman admin (403)
+  for (const p of ['/tetapan/pengguna', '/sistem', '/admin/pemantauan', '/admin/backup', '/admin/semak-penyata', '/tetapan/ai', '/tetapan/api', '/tetapan/masjid-baru']) {
     expect((await page.request.get(p)).status(), p).toBe(403)
   }
 })
@@ -174,14 +191,16 @@ test('BENDAHARI: kewangan penuh + Semak Penyata; TIADA halaman sistem', async ({
   await page.goto('/semak-penyata', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('form[action$="/semak-penyata/muat-naik"]')).toHaveCount(1)
 
-  // TIDAK BOLEH: sistem/admin (403)
-  for (const p of ['/sistem', '/admin/pemantauan', '/admin/semak-penyata', '/tetapan/ai', '/tetapan/masjid-baru']) {
+  // TIDAK BOLEH: urus pengguna (penyedia sahaja) + sistem/admin (403)
+  for (const p of ['/tetapan/pengguna', '/sistem', '/admin/pemantauan', '/admin/semak-penyata', '/tetapan/ai', '/tetapan/masjid-baru']) {
     expect((await page.request.get(p)).status(), p).toBe(403)
   }
 
-  // Menu TIDAK menunjukkan Pentadbiran (sistem sahaja utk admin)
+  // Menu TIDAK menunjukkan Pentadbiran (sistem) mahupun Pengurusan Pengguna (penyedia sahaja)
   await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('#sidebar, .sidebar').first()).not.toContainText('Pemantauan Sistem')
+  const sidebarBdh = page.locator('#sidebar, .sidebar').first()
+  await expect(sidebarBdh).not.toContainText('Pemantauan Sistem')
+  await expect(sidebarBdh).not.toContainText('Pengurusan Pengguna')
 })
 
 /* ================================================================== VIEWER */

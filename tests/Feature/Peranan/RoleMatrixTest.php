@@ -10,10 +10,11 @@ use Tests\Concerns\MasjidContext;
 use Tests\TestCase;
 
 /**
- * Matriks peranan: ADMIN = superadmin (akses PENUH baca+tulis semua tenant,
- * tulis melalui pagar bukan-admin direkod sebagai ADMIN_OVERRIDE);
- * BENDAHARI = maker; PENGERUSI = checker; SETIAUSAHA = tulis daftar bukan-kewangan;
- * JURUAUDIT = baca penuh + jejak audit, sifar tulis.
+ * Matriks peranan: ADMIN = superadmin/PENYEDIA (baca penuh semua tenant + fungsi
+ * sistem, TETAPI tiada tulis kewangan/tetapan tenant — cubaan tulis direkod
+ * sebagai PERMISSION_DENIED); BENDAHARI = maker; PENGERUSI = checker;
+ * SETIAUSAHA = tulis daftar bukan-kewangan; JURUAUDIT = baca penuh + jejak audit,
+ * sifar tulis.
  */
 class RoleMatrixTest extends TestCase
 {
@@ -34,31 +35,47 @@ class RoleMatrixTest extends TestCase
         ]);
     }
 
-    public function test_admin_akses_penuh_tulis_kewangan_dan_tetapan_masjid(): void
+    public function test_admin_mod_penyedia_dialih_ke_konsol(): void
     {
         $admin = $this->buat('admin');
 
-        // Superadmin LEPAS semua pagar peranan (payload kosong → 302 validasi, BUKAN 403).
-        foreach (['kutipan.simpan', 'belanja.simpan', 'belanjawan.simpan', 'dana.simpan',
-                  'kawalan.simpan', 'tetapan.masjid.kemaskini'] as $rt) {
-            $this->assertNotSame(403, $this->actingAs($admin)->post(route($rt), [])->status(), $rt);
+        // MOD PENYEDIA (belum "Masuk"): laluan kewangan tenant dialih ke Konsol Sistem.
+        foreach (['dashboard', 'kutipan.baru', 'kawalan.index', 'penyata.bulanan'] as $rt) {
+            $this->actingAs($admin)->get(route($rt))->assertRedirect(route('sistem.console'));
         }
 
-        // Baca + Konsol Sistem kekal.
+        // Laluan peringkat-penyedia kekal boleh dicapai.
+        $this->actingAs($admin)->get(route('sistem.console'))->assertOk();
+        $this->actingAs($admin)->get(route('tetapan.pengguna'))->assertOk();
+    }
+
+    public function test_admin_provider_baca_sahaja_tiada_tulis_kewangan_tenant(): void
+    {
+        $admin = $this->buat('admin');
+        $this->adminMasuk($admin); // "Masuk" masjid → mod dalam-tenant
+
+        // Superadmin = PENYEDIA: tulis kewangan/tetapan tenant DIHALANG (403).
+        foreach (['kutipan.simpan', 'belanja.simpan', 'belanjawan.simpan', 'dana.simpan',
+                  'kawalan.simpan', 'tetapan.masjid.kemaskini', 'bank.simpan'] as $rt) {
+            $this->actingAs($admin)->post(route($rt), [])->assertForbidden();
+        }
+
+        // Baca penuh + Konsol Sistem kekal.
         $this->actingAs($admin)->get(route('kawalan.index'))->assertOk();
         $this->actingAs($admin)->get(route('sistem.console'))->assertOk();
 
-        // Tulis melalui pagar bukan-admin direkodkan sebagai ADMIN_OVERRIDE.
+        // Cubaan tulis tenant direkod sebagai PERMISSION_DENIED (jejak keselamatan).
         $this->assertTrue(
             \App\Models\SecurityEvent::withoutMasjidScope()
-                ->where('jenis', 'ADMIN_OVERRIDE')->exists(),
-            'ADMIN_OVERRIDE security_event tidak direkodkan'
+                ->where('jenis', 'PERMISSION_DENIED')->exists(),
+            'PERMISSION_DENIED security_event tidak direkodkan untuk cubaan tulis admin'
         );
     }
 
-    public function test_admin_juga_pelulus_dan_pengerusi_pelulus(): void
+    public function test_admin_bukan_pelulus_pengerusi_pelulus(): void
     {
         $admin = $this->buat('admin');
+        $this->adminMasuk($admin); // "Masuk" masjid → mod dalam-tenant
         $pengerusi = $this->buat('pengerusi');
 
         // Cipta permohonan PENDING sebenar supaya ikatan {approval} berjaya → pagar peranan yang menentukan.
@@ -70,12 +87,13 @@ class RoleMatrixTest extends TestCase
         // Pengerusi = pelulus → bukan 403 (lepas pagar peranan).
         $this->assertNotSame(403, $this->actingAs($pengerusi)->post(route('kelulusan.lulus', $approval->id))->status());
 
-        // Superadmin JUGA lepas pagar pengerusi (akses penuh) + boleh lihat senarai.
+        // Superadmin (penyedia) BUKAN pelulus (pengasingan tugas) → 403,
+        // tetapi BOLEH lihat senarai kelulusan (baca).
         $approval2 = app(ApprovalService::class)->mohon('BAYARAN', 600.0, [
             'pemohon' => 'UJIAN2', 'coa_id' => $this->coaId('600-06000'), 'jumlah' => '600',
             'cara_bayar' => 'EFT', 'tar_mohon' => '2026-06-12', 'tar_lulus' => '2026-06-12', 'auto_baucer' => '1',
         ]);
-        $this->assertNotSame(403, $this->actingAs($admin)->post(route('kelulusan.lulus', $approval2->id))->status());
+        $this->actingAs($admin)->post(route('kelulusan.lulus', $approval2->id))->assertForbidden();
         $this->actingAs($admin)->get(route('kelulusan.index'))->assertOk();
     }
 
@@ -91,7 +109,8 @@ class RoleMatrixTest extends TestCase
         $this->assertNotSame(403, $this->actingAs($p)->post(route('bank.simpan'), [])->status());
         $this->assertNotSame(403, $this->actingAs($p)->post(route('kawalan.simpan'), [])->status());
         $this->assertNotSame(403, $this->actingAs($p)->post(route('tetapan.masjid.kemaskini'), [])->status());
-        $this->actingAs($p)->get(route('tetapan.pengguna'))->assertOk();
+        // Urus pengguna kini PENYEDIA sahaja → pentadbir tenant disekat.
+        $this->actingAs($p)->get(route('tetapan.pengguna'))->assertForbidden();
 
         // BUKAN sistem: Konsol Sistem & onboarding masjid → 403.
         $this->actingAs($p)->get(route('sistem.console'))->assertForbidden();

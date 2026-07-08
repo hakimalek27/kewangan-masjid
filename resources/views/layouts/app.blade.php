@@ -36,16 +36,23 @@
 
     {{-- ===== Sidebar ===== --}}
     <nav class="sidebar d-flex flex-column flex-shrink-0" id="sidebar">
-        <a href="{{ route('dashboard') }}" class="sidebar-brand text-decoration-none text-center py-3 d-block">
-            @if ($masjidSemasa?->logoUrl())
-                <span class="d-inline-block bg-white rounded p-1">
-                    <img src="{{ $masjidSemasa->logoUrl() }}" alt="{{ __('Logo') }}" style="max-height:46px; max-width:140px;">
-                </span>
+        <a href="{{ route(($modProvider ?? false) ? 'sistem.console' : 'dashboard') }}" class="sidebar-brand text-decoration-none text-center py-3 d-block">
+            @if (($modProvider ?? false))
+                {{-- Mod penyedia: jenama SISTEM (bukan logo/nama tenant) --}}
+                <i class="bi bi-bank2 fs-4"></i>
+                <div class="fw-bold small mt-1">{{ config('app.name') }}</div>
+                <div class="sidebar-subtitle">{{ __('Konsol Penyedia') }}</div>
             @else
-                <i class="bi bi-moon-stars-fill fs-4"></i>
+                @if ($masjidSemasa?->logoUrl())
+                    <span class="d-inline-block bg-white rounded p-1">
+                        <img src="{{ $masjidSemasa->logoUrl() }}" alt="{{ __('Logo') }}" style="max-height:46px; max-width:140px;">
+                    </span>
+                @else
+                    <i class="bi bi-moon-stars-fill fs-4"></i>
+                @endif
+                <div class="fw-bold small mt-1">{{ $masjidSemasa?->nama ?? config('app.name') }}</div>
+                <div class="sidebar-subtitle">{{ __('Sistem Pengurusan Kewangan Masjid') }}</div>
             @endif
-            <div class="fw-bold small mt-1">{{ $masjidSemasa?->nama ?? config('app.name') }}</div>
-            <div class="sidebar-subtitle">{{ __('Sistem Pengurusan Kewangan Masjid') }}</div>
         </a>
         <hr class="sidebar-divider my-0">
         <div class="sidebar-menu flex-grow-1 overflow-auto">
@@ -80,15 +87,35 @@
                     'admin.ralat'       => ['admin'],
                     'admin.keselamatan' => ['admin'],
                     'admin.backup'      => ['admin'],
-                    'admin.dualwrite'   => ['admin'],
                     'admin.semakpenyata' => ['admin'],
                     'tetapan.ai'        => ['admin'],
                     'tetapan.api'       => ['admin'],
-                    'tetapan.pengguna'  => ['admin', 'bendahari', 'pentadbir'],
+                    'tetapan.pengguna'  => ['admin'], // urus pengguna = penyedia sahaja
+                    'tetapan.dualwrite' => ['bendahari', 'pentadbir', 'admin'], // dual-write = tetapan tenant
                 ];
-                // Superadmin (admin) = akses PENUH semua tenant → nampak menu penuh
-                // (kewangan + sistem). Konteks masjid ikut pemilih masjid semasa.
+                // $modProvider dikongsi dari AppServiceProvider (composer layouts.app):
+                // superadmin dalam MOD PENYEDIA (belum "Masuk" masjid) → sidebar tunjuk
+                // fungsi SISTEM sahaja, bukan menu kewangan tenant.
+                $modProvider = $modProvider ?? false;
+                $adminProviderRoutes = [
+                    'sistem.console',
+                    'admin.pemantauan', 'admin.audit', 'admin.ralat', 'admin.keselamatan',
+                    'admin.backup', 'admin.semakpenyata',
+                    'tetapan.ai', 'tetapan.api',
+                    'tetapan.pengguna', 'tetapan.katalaluan',
+                ];
             @endphp
+            @if ($peranan === 'admin' && ! $modProvider)
+                <div class="px-3 py-2 mb-2" style="background:rgba(13,110,253,.08); border-left:3px solid var(--bs-primary)">
+                    <div class="small text-primary fw-semibold mb-1"><i class="bi bi-eye me-1"></i>{{ __('Mod Lihat (Penyedia)') }}</div>
+                    <div class="small text-truncate mb-2" title="{{ $masjidSemasa?->nama }}">{{ $masjidSemasa?->nama }}</div>
+                    <form method="POST" action="{{ route('masjid.keluar') }}" class="m-0">@csrf
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                            <i class="bi bi-arrow-left me-1"></i>{{ __('Kembali ke Konsol') }}
+                        </button>
+                    </form>
+                </div>
+            @endif
             @foreach (config('spkm.menu') as $i => $group)
                 @php
                     $items = $group['items'];
@@ -96,7 +123,10 @@
                     if ($peranan === 'admin' && ($group['label'] ?? '') === 'Dashboard') {
                         $items = array_merge([['Konsol Sistem', 'sistem.console']], $items);
                     }
-                    if ($peranan === 'viewer') {
+                    if ($modProvider) {
+                        // Mod penyedia: hanya menu peringkat-sistem (kewangan tenant tersembunyi).
+                        $items = array_filter($items, fn ($it) => in_array($it[1], $adminProviderRoutes, true));
+                    } elseif ($peranan === 'viewer') {
                         $items = array_filter($items, fn ($it) => in_array($it[1], $viewerRoutes, true));
                     } else {
                         $items = array_filter($items, function ($it) use ($peranan, $menuHad) {
@@ -141,7 +171,7 @@
             @endforeach
         </div>
         <div class="p-3 small text-center sidebar-footer">
-            &copy; {{ date('Y') }} {{ $masjidSemasa?->nama ?? '' }}
+            &copy; {{ date('Y') }} {{ ($modProvider ?? false) ? config('app.name') : ($masjidSemasa?->nama ?? '') }}
         </div>
     </nav>
 
@@ -242,7 +272,8 @@
                 @endauth
 
                 @auth
-                    @if (($masjidSenarai ?? collect())->count() > 1)
+                    {{-- Penukar masjid tersembunyi dalam MOD PENYEDIA — admin "Masuk" dari Konsol Sistem dahulu. --}}
+                    @if (! $modProvider && ($masjidSenarai ?? collect())->count() > 1)
                         <div class="dropdown">
                             <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" title="{{ __('Tukar Masjid') }}">
                                 <i class="bi bi-building me-1"></i>{{ \Illuminate\Support\Str::limit($masjidSemasa?->nama ?? __('Masjid'), 16) }}

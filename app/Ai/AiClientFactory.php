@@ -36,17 +36,25 @@ PROMPT;
      * pembungkus {"lines":[...]} kerana json_object tak boleh array di akar.
      */
     public const PROMPT_PENYATA = <<<'PROMPT'
-Anda pembantu kewangan masjid. Dokumen ini ialah PENYATA BANK penuh.
-Ekstrak SETIAP baris transaksi, satu demi satu, dalam susunan tarikh penyata.
+Anda pembantu kewangan masjid. Imej ini ialah SATU MUKA penyata bank (mungkin sebahagian daripada penyata banyak muka).
+Ekstrak SETIAP baris transaksi pada muka ini, satu demi satu, ikut susunan dari atas ke bawah.
 Pulangkan JSON SAHAJA (tiada teks lain) berbentuk:
 {"lines":[{"tarikh":"YYYY-MM-DD","deskripsi":"","debit":0.00,"kredit":0.00,"baki":null,
 "cadangan_jenis":"KUTIPAN|BAYARAN","cadangan_coa":"cth 400-01010","confidence":0}]}
-Peraturan:
-- Wang MASUK (kredit > 0) = KUTIPAN → cadangkan kod hasil 400/450 paling padan dengan deskripsi;
-  jika deskripsi tidak bermakna/kosong, cadangkan kod infaq/sedekah.
-- Wang KELUAR (debit > 0) = BAYARAN → cadangkan kod belanja 600/650 paling padan.
-- Setiap baris hanya SATU sisi (debit ATAU kredit), bukan kedua-duanya.
-- JANGAN cipta baris yang tiada dalam penyata. JANGAN langkau baris.
+Peraturan TARIKH (PENTING):
+- Guna TARIKH SEBENAR dari lajur Tarikh/Date setiap baris — JANGAN guna tarikh hari ini.
+- Tarikh penyata biasanya format DD/MM/YY atau DD/MM/YYYY (cth "1/02/24" = 1 Feb 2024). Tukar ke YYYY-MM-DD.
+- Tahun 2-digit: "24"=2024, "23"=2023 (guna 20YY; JANGAN tolak setahun).
+- Jika satu baris tiada tarikh sendiri, guna tarikh baris SEBELUMNYA (tarikh sama diulang).
+Peraturan DESKRIPSI:
+- Deskripsi = gabungan teks keterangan (jenis transaksi + nota + nama penghantar), cth "DUITNOW CREDIT Infaq ZULKEFLI BIN HASSAN".
+- JANGAN masukkan tarikh atau nombor baki ke dalam deskripsi.
+Peraturan JUMLAH & COA:
+- Wang MASUK (lajur Credit/Wang Masuk > 0) = KUTIPAN → cadangkan kod hasil 400/450 paling padan dengan deskripsi;
+  jika deskripsi tidak bermakna/kosong (cth QR tanpa nota), cadangkan kod infaq/sedekah.
+- Wang KELUAR (lajur Debit/Wang Keluar > 0) = BAYARAN → cadangkan kod belanja 600/650 paling padan.
+- Setiap baris hanya SATU sisi (debit ATAU kredit), bukan kedua-duanya. Nilai ".00" bermakna kosong (0).
+- JANGAN cipta baris yang tiada dalam imej. JANGAN langkau baris. Abaikan baris "B/F" / baki bawa ke hadapan.
 - confidence ialah keyakinan cadangan COA anda 0-100.
 PROMPT;
 
@@ -55,15 +63,38 @@ PROMPT;
     }
 
     /**
-     * Klien AI PUSAT untuk "Semak Penyata (AI)" — SATU kunci OpenAI dikawal
-     * superadmin (app_setting masjid_id=0 + vault), dikongsi semua tenant.
+     * Klien AI PUSAT untuk "Semak Penyata (AI)" — profil provider GLOBAL dikawal
+     * superadmin (jadual sp_provider + vault), dikongsi semua tenant. Bendahari
+     * boleh pilih provider mana semasa muat naik (banding OCR); jika $providerId
+     * null → guna profil default aktif. Fallback: konfigurasi tunggal legasi
+     * app_setting sp_ai_* (backward-compat sebelum multi-provider).
      *
-     * @return array{0: \App\Ai\Contracts\StatementExtractorInterface, 1: array{provider: string, model: string, base_url: ?string}}
+     * @return array{0: \App\Ai\Contracts\StatementExtractorInterface, 1: array{provider: string, model: string, base_url: ?string, sp_provider_id: int}}
      *
      * @throws AiException jika belum dikonfigurasi
      */
-    public function forPusat(): array
+    public function forPusat(?int $providerId = null): array
     {
+        $provider = null;
+        if ($providerId) {
+            $provider = \App\Models\SpProvider::where('id', $providerId)->where('is_active', true)->first();
+        }
+        $provider ??= \App\Models\SpProvider::aktif()->first();
+
+        if ($provider) {
+            $apiKey = $provider->api_key_ref ? $this->vault->get($provider->api_key_ref) : null;
+            if ($apiKey === null || $apiKey === '') {
+                throw new AiException("Kunci API untuk provider '{$provider->nama}' tidak ditemui dalam vault.");
+            }
+
+            return [
+                $this->statementExtractor($provider->dialect, $apiKey, $provider->model, $provider->base_url),
+                ['provider' => $provider->nama, 'model' => $provider->model,
+                    'base_url' => $provider->base_url, 'sp_provider_id' => (int) $provider->id],
+            ];
+        }
+
+        // --- Fallback legasi (belum ada profil sp_provider) ---
         $global = \App\Services\Ai\KuotaPenyataService::MASJID_GLOBAL;
         $keyRef = \App\Support\Setting::get('sp_ai_key_ref', null, $global);
         $model = \App\Support\Setting::get('sp_ai_model', null, $global);
@@ -80,8 +111,22 @@ PROMPT;
 
         return [
             new OpenAiDialect($apiKey, $model, $baseUrl),
-            ['provider' => 'OPENAI', 'model' => $model, 'base_url' => $baseUrl],
+            ['provider' => 'OPENAI', 'model' => $model, 'base_url' => $baseUrl, 'sp_provider_id' => 0],
         ];
+    }
+
+    /**
+     * Extractor penyata penuh ikut dialect. Semua provider serasi-OpenAI
+     * (OpenAI/DeepSeek/Ollama/OpenRouter) guna dialect 'openai' + base_url.
+     */
+    private function statementExtractor(string $dialect, string $apiKey, string $model, ?string $baseUrl): \App\Ai\Contracts\StatementExtractorInterface
+    {
+        return match ($dialect) {
+            'openai' => new OpenAiDialect($apiKey, $model, $baseUrl),
+            default => throw new AiException(
+                "Dialect '{$dialect}' belum menyokong ekstrak penyata penuh. Guna dialect 'openai' (serasi OpenAI: DeepSeek/Ollama/OpenRouter)."
+            ),
+        };
     }
 
     /** Prompt penyata penuh = arahan + panduan COA masjid (mapping + hasil 400/450 + belanja 600/650). */

@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Web\Admin\AuditController;
 use App\Http\Controllers\Web\Admin\BackupController;
-use App\Http\Controllers\Web\Admin\DualWriteController;
+use App\Http\Controllers\Web\Tetapan\DualWriteController;
 use App\Http\Controllers\Web\Admin\KeselamatanController;
 use App\Http\Controllers\Web\Admin\PemantauanController;
 use App\Http\Controllers\Web\Admin\RalatController;
@@ -58,7 +58,9 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth')->name('logout');
 
 // ---------- Aplikasi (perlu log masuk) ----------
-Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group(function () {
+// admin.provider: superadmin dalam MOD PENYEDIA (belum "Masuk" masjid) dialih ke Konsol
+// untuk sebarang laluan kewangan tenant — pemisahan penyedia-vs-penyewa.
+Route::middleware(['auth', 'masjid', 'viewer.guard', 'admin.provider', 'paksa.katalaluan'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -67,6 +69,9 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
 
     // Penukar masjid aktif (admin: semua; pemerhati: masjid ditugaskan) — tulis sesi sahaja
     Route::post('/masjid/tukar', [MasjidSwitchController::class, 'tukar'])->name('masjid.tukar');
+
+    // "Kembali ke Konsol" — admin keluar mod dalam-tenant (padam pilihan masjid) → Konsol Sistem
+    Route::post('/masjid/keluar', [MasjidSwitchController::class, 'keluar'])->name('masjid.keluar');
 
     // Fasa 5 — Kotak Draf AI (Telegram → AI → draf → pengesahan bendahari)
     Route::get('/draf', [DrafController::class, 'index'])->name('draf.index');
@@ -255,6 +260,13 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         Route::post('/penyata/setting/tandatangan/{signature}/kemaskini', [PenyataSettingController::class, 'sigKemaskini'])->whereNumber('signature')->name('penyata.setting.sig.kemaskini');
         Route::post('/penyata/setting/tandatangan/{signature}/padam', [PenyataSettingController::class, 'sigPadam'])->whereNumber('signature')->name('penyata.setting.sig.padam');
         Route::post('/penyata/setting/mod', [PenyataSettingController::class, 'mod'])->name('penyata.setting.mod');
+
+        // Dual-Write SPPKMS — TETAPAN TENANT (setiap masjid isi kredensial SPPKMS sendiri)
+        Route::get('/tetapan/dual-write', [DualWriteController::class, 'index'])->name('tetapan.dualwrite');
+        Route::post('/tetapan/dual-write/toggle', [DualWriteController::class, 'toggle'])->name('tetapan.dualwrite.toggle');
+        Route::post('/tetapan/dual-write/kredensial', [DualWriteController::class, 'kredensial'])->name('tetapan.dualwrite.kredensial');
+        Route::post('/tetapan/dual-write/{sync}/cuba-semula', [DualWriteController::class, 'cubaSemula'])->whereNumber('sync')->name('tetapan.dualwrite.retry');
+        Route::post('/tetapan/dual-write/tertunggak', [DualWriteController::class, 'tertunggak'])->name('tetapan.dualwrite.tertunggak');
     });
 
     // Fasa 7 — Pentadbiran: pemantauan, audit, ralat, keselamatan, backup (admin sahaja)
@@ -274,17 +286,12 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         Route::post('/backup/sekarang', [BackupController::class, 'sekarang'])->name('admin.backup.sekarang');
         Route::post('/backup/tertunggak', [BackupController::class, 'tertunggak'])->name('admin.backup.tertunggak');
 
-        // Fasa 8 — Dual-write ke SPPKMS lama (jambatan sementara)
-        Route::get('/dual-write', [DualWriteController::class, 'index'])->name('admin.dualwrite');
-        Route::post('/dual-write/toggle', [DualWriteController::class, 'toggle'])->name('admin.dualwrite.toggle');
-        Route::post('/dual-write/kredensial', [DualWriteController::class, 'kredensial'])->name('admin.dualwrite.kredensial');
-        Route::post('/dual-write/{sync}/cuba-semula', [DualWriteController::class, 'cubaSemula'])->whereNumber('sync')->name('admin.dualwrite.retry');
-        Route::post('/dual-write/tertunggak', [DualWriteController::class, 'tertunggak'])->name('admin.dualwrite.tertunggak');
-
         // Semak Penyata (AI) — kawalan pusat: kunci OpenAI, toggle global, kuota per-tenant
         Route::get('/semak-penyata', [SemakPenyataAdminController::class, 'index'])->name('admin.semakpenyata');
         Route::post('/semak-penyata/toggle', [SemakPenyataAdminController::class, 'toggle'])->name('admin.semakpenyata.toggle');
         Route::post('/semak-penyata/kunci', [SemakPenyataAdminController::class, 'simpanKunci'])->name('admin.semakpenyata.kunci');
+        Route::post('/semak-penyata/provider', [SemakPenyataAdminController::class, 'simpanProvider'])->name('admin.semakpenyata.provider');
+        Route::post('/semak-penyata/provider/{provider}/padam', [SemakPenyataAdminController::class, 'padamProvider'])->whereNumber('provider')->name('admin.semakpenyata.provider.padam');
         Route::post('/semak-penyata/kuota/{masjid}', [SemakPenyataAdminController::class, 'simpanKuota'])->whereNumber('masjid')->name('admin.semakpenyata.kuota');
         Route::post('/semak-penyata/topup/{masjid}', [SemakPenyataAdminController::class, 'topup'])->whereNumber('masjid')->name('admin.semakpenyata.topup');
         Route::post('/semak-penyata/batch/{id}/gagalkan', [SemakPenyataAdminController::class, 'gagalkan'])->whereNumber('id')->name('admin.semakpenyata.gagalkan');
@@ -300,8 +307,9 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         Route::post('/tetapan/masjid', [MasjidController::class, 'kemaskini'])->name('tetapan.masjid.kemaskini');
     });
 
-    // Pengurusan Pengguna — admin (semua masjid) + bendahari/pentadbir (masjid SENDIRI, diskop dlm controller).
-    Route::middleware('role:admin,bendahari,pentadbir')->group(function () {
+    // Pengurusan Pengguna — SUPERADMIN (penyedia) SAHAJA. Bendahari/pentadbir tenant
+    // tidak lagi urus akaun (pengasingan tugas: identiti dikawal penyedia).
+    Route::middleware('role:admin')->group(function () {
         Route::get('/tetapan/pengguna', [PenggunaController::class, 'index'])->name('tetapan.pengguna');
         Route::get('/tetapan/pengguna/{pengguna}/edit', [PenggunaController::class, 'edit'])->whereNumber('pengguna')->name('tetapan.pengguna.edit');
         Route::post('/tetapan/pengguna', [PenggunaController::class, 'simpan'])->name('tetapan.pengguna.simpan');
@@ -365,6 +373,7 @@ Route::middleware(['auth', 'masjid', 'viewer.guard', 'paksa.katalaluan'])->group
         // Semak Penyata (AI) — tindakan
         Route::post('/semak-penyata/muat-naik', [SemakPenyataController::class, 'muatNaik'])->name('semakpenyata.muatnaik');
         Route::post('/semak-penyata/baris/{line}/rekod', [SemakPenyataController::class, 'rekod'])->whereNumber('line')->name('semakpenyata.rekod');
+        Route::post('/semak-penyata/lump-sum', [SemakPenyataController::class, 'rekodLumpSum'])->name('semakpenyata.lumpsum');
         Route::post('/semak-penyata/baris/{line}/abai', [SemakPenyataController::class, 'abai'])->whereNumber('line')->name('semakpenyata.abai');
 
         // Bulk sahkan draf AI

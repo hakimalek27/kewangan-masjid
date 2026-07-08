@@ -59,6 +59,12 @@ class SemakPenyataTest extends TestCase
         Setting::set('sp_ai_model', 'gpt-4o', KuotaPenyataService::MASJID_GLOBAL);
 
         Storage::fake('local');
+
+        // Poppler tidak dijalankan ke atas fail PALSU dalam ujian — paksa laluan
+        // panggilan-tunggal (fallback) supaya mime application/pdf tidak cuba render.
+        $this->app->instance(\App\Services\Ai\PdfRenderService::class, new class extends \App\Services\Ai\PdfRenderService {
+            public function tersedia(): bool { return false; }
+        });
     }
 
     /** Respons AI palsu: 1 baris masuk (kredit) + 1 baris keluar (debit). */
@@ -89,6 +95,103 @@ class SemakPenyataTest extends TestCase
     private function jalankanJob(int $batchId): void
     {
         app()->call([new ProsesPenyataAi($batchId), 'handle']);
+    }
+
+    /** Pipeline PDF imbasan: pecah kepada 2 muka → OCR satu-satu → GABUNG semua baris + token. */
+    public function test_pipeline_pdf_pecah_muka_gabung_semua(): void
+    {
+        $dir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'sp_pipe_'.uniqid();
+        @mkdir($dir);
+        $img1 = $dir.DIRECTORY_SEPARATOR.'muka-1.jpg';
+        $img2 = $dir.DIRECTORY_SEPARATOR.'muka-2.jpg';
+        file_put_contents($img1, 'JPG1');
+        file_put_contents($img2, 'JPG2');
+
+        // Renderer PALSU: tersedia + pulang 2 imej muka (abaikan fail sebenar).
+        $this->app->instance(\App\Services\Ai\PdfRenderService::class, new class($img1, $img2) extends \App\Services\Ai\PdfRenderService {
+            public function __construct(private string $a, private string $b) {}
+            public function tersedia(): bool { return true; }
+            public function renderKeImej(string $absPdfPath, string $destDir, ?int $dpi = null): array { return [$this->a, $this->b]; }
+        });
+
+        // AI pulang baris BERBEZA setiap muka (tokens 1000 + 1500).
+        $muka = fn (string $tarikh, string $desk, float $kredit, int $tok) => ['choices' => [[
+            'message' => ['content' => json_encode(['lines' => [[
+                'tarikh' => $tarikh, 'deskripsi' => $desk, 'debit' => 0, 'kredit' => $kredit,
+                'cadangan_jenis' => 'KUTIPAN', 'cadangan_coa' => '400-03010', 'confidence' => 90,
+            ]]])], 'finish_reason' => 'stop',
+        ]], 'usage' => ['total_tokens' => $tok]];
+        Http::fakeSequence()
+            ->push($muka('2024-02-01', 'INFAQ MUKA1', 10.00, 1000))
+            ->push($muka('2024-02-02', 'INFAQ MUKA2', 20.00, 1500));
+
+        $batch = $this->muatFail('application/pdf');
+        $this->jalankanJob($batch->id);
+
+        $batch->refresh();
+        $this->assertSame('SEDIA', $batch->status);
+        $this->assertSame(2, (int) $batch->bil_baris);       // 2 muka digabung
+        $this->assertSame(2500, (int) $batch->tokens_used);  // jumlah token 2 panggilan
+
+        @unlink($img1);
+        @unlink($img2);
+        @rmdir($dir);
+    }
+
+    /** Sediakan batch SEDIA + baris UNMATCHED (sisi & jumlah tersuai) untuk ujian lump-sum. */
+    private function batchDenganBaris(array $baris): array
+    {
+        $batch = PenyataSemakan::create([
+            'bank_account_id' => $this->bankId, 'file_path' => 'x', 'original_name' => 'x.pdf',
+            'mime' => 'application/pdf', 'file_hash' => hash('sha256', uniqid()), 'status' => 'SEDIA',
+        ]);
+        $ids = [];
+        foreach ($baris as $b) {
+            $ids[] = BankStatementLine::create([
+                'bank_account_id' => $this->bankId, 'tarikh' => $b['tarikh'] ?? '2024-02-01',
+                'deskripsi' => $b['desk'] ?? 'QR INFAQ', 'debit' => $b['debit'] ?? 0, 'kredit' => $b['kredit'] ?? 0,
+                'status' => 'UNMATCHED', 'batch_id' => $batch->id, 'cadangan_jenis' => ($b['kredit'] ?? 0) > 0 ? 'KUTIPAN' : 'BAYARAN',
+                'cadangan_coa_id' => $b['coa'] ?? null, 'ai_confidence' => 50,
+            ])->id;
+        }
+
+        return [$batch, $ids];
+    }
+
+    public function test_lump_sum_longgok_baris_jadi_satu_rekod(): void
+    {
+        $coaId = $this->coaId('400-03010');
+        [, $ids] = $this->batchDenganBaris([
+            ['kredit' => 1.00, 'coa' => $coaId], ['kredit' => 2.00, 'coa' => $coaId], ['kredit' => 10.00, 'coa' => $coaId],
+        ]);
+
+        $sebelum = (int) Kutipan::withoutMasjidScope()->max('id');
+        $r = app(SemakPenyataService::class)->rekodLumpSum($ids, [
+            'coa_id' => $coaId, 'tarikh' => '2024-02-01', 'deskripsi' => 'Infaq/Sedekah QR',
+        ]);
+
+        $this->assertSame('KUTIPAN', $r['jenis']);
+        $this->assertSame(3, $r['bil']);
+        $this->assertSame('13.00', $r['jumlah']);
+
+        // SATU kutipan sahaja dicipta untuk 3 baris.
+        $this->assertSame(1, Kutipan::withoutMasjidScope()->where('id', '>', $sebelum)->count());
+
+        // Semua 3 baris MATCHED ke voucher SAMA.
+        $lines = BankStatementLine::whereIn('id', $ids)->get();
+        $this->assertTrue($lines->every(fn ($l) => $l->status === 'MATCHED'));
+        $this->assertSame(1, $lines->pluck('matched_voucher_id')->unique()->count());
+    }
+
+    public function test_lump_sum_tolak_sisi_bercampur(): void
+    {
+        $coaId = $this->coaId('400-03010');
+        [, $ids] = $this->batchDenganBaris([
+            ['kredit' => 10.00, 'coa' => $coaId], ['debit' => 5.00],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        app(SemakPenyataService::class)->rekodLumpSum($ids, ['coa_id' => $coaId, 'tarikh' => '2024-02-01']);
     }
 
     public function test_muat_naik_cipta_batch_dan_dispatch(): void

@@ -8,6 +8,7 @@ use App\Models\BankStatementLine;
 use App\Models\PenyataSemakan;
 use App\Services\Ai\CoaCadanganService;
 use App\Services\Ai\KuotaPenyataService;
+use App\Services\Ai\PdfRenderService;
 use App\Services\Lanjutan\ReconciliationService;
 use App\Services\Security\AuditTrailService;
 use App\Support\Setting;
@@ -30,7 +31,9 @@ class ProsesPenyataAi implements ShouldQueue
 
     public int $tries = 2;
     public int $backoff = 60;
-    public int $timeout = 300; // panggilan AI penyata sehingga 120s + insert baris
+    // PDF imbasan berbilang-muka diproses satu muka satu panggilan AI (≤120s setiap
+    // satu) → penyata 70+ muka boleh ambil beberapa minit. Had luas untuk pipeline.
+    public int $timeout = 1800;
 
     public function __construct(public int $batchId)
     {
@@ -43,7 +46,14 @@ class ProsesPenyataAi implements ShouldQueue
         ReconciliationService $recon,
         KuotaPenyataService $kuota,
         AuditTrailService $audit,
+        PdfRenderService $pdf,
     ): void {
+        // Pertahanan: panggilan AI penyata boleh ambil sehingga 120s. Bila queue
+        // berjalan 'sync' (dev, tiada worker), job ini dilaksana dalam request web
+        // yang terhad kepada max_execution_time=30 → fatal. Naikkan had di sini supaya
+        // selari dgn $timeout=300 job (worker CLI biasanya sudah tiada had).
+        @set_time_limit($this->timeout);
+
         $batch = PenyataSemakan::withoutMasjidScope()->find($this->batchId);
         if (!$batch || !in_array($batch->status, ['UPLOADED', 'AI_PROCESSING'], true)) {
             return; // idempotent
@@ -72,16 +82,17 @@ class ProsesPenyataAi implements ShouldQueue
         $masjidId = (int) $batch->masjid_id;
 
         try {
-            [$extractor, $config] = $factory->forPusat();
+            // Guna provider yang bendahari PILIH untuk batch ini (banding OCR);
+            // 0 → forPusat() jatuh ke default/legasi.
+            [$extractor, $config] = $factory->forPusat((int) $batch->sp_provider_id);
 
-            $bytes = Storage::disk('local')->get($batch->file_path);
-            if ($bytes === null) {
-                throw new AiException('Fail penyata tidak ditemui: '.$batch->file_path);
-            }
+            // Rekod provider sebenar yang digunakan (label untuk paparan/banding).
+            $batch->update(['provider_label' => ($config['provider'] ?? 'OPENAI').' ('.($config['model'] ?? '').')']);
 
-            $hasil = $extractor->extractStatement($bytes, $batch->mime, $factory->buildPromptPenyata($masjidId));
+            $prompt = $factory->buildPromptPenyata($masjidId);
+            [$lines, $totalTokens] = $this->ekstrakBaris($batch, $extractor, $pdf, $prompt);
 
-            if (empty($hasil->lines)) {
+            if (empty($lines)) {
                 throw new AiException('AI tidak menemui sebarang baris transaksi dalam penyata ini.');
             }
 
@@ -95,8 +106,8 @@ class ProsesPenyataAi implements ShouldQueue
             $bilBaris = 0;
             $bilLangkau = 0;
 
-            DB::transaction(function () use ($hasil, $batch, $cadangan, $masjidId, $kunci, &$sediaAda, &$dilihat, &$bilBaris, &$bilLangkau) {
-                foreach ($hasil->lines as $ln) {
+            DB::transaction(function () use ($lines, $batch, $cadangan, $masjidId, $kunci, &$sediaAda, &$dilihat, &$bilBaris, &$bilLangkau) {
+                foreach ($lines as $ln) {
                     // Tarikh tak sah daripada AI: JANGAN reka senyap — guna tarikh
                     // hari ini TETAPI tanda keyakinan 0 + label supaya bendahari perasan.
                     $tarikhSah = $ln->tarikh !== null;
@@ -158,9 +169,9 @@ class ProsesPenyataAi implements ShouldQueue
                 'status' => 'SEDIA',
                 'provider' => $config['provider'],
                 'model' => $config['model'],
-                'tokens_used' => $hasil->tokensUsed,
-                'cost_usd' => $hasil->tokensUsed && $kosPer1k > 0
-                    ? round($hasil->tokensUsed / 1000 * $kosPer1k, 4) : null,
+                'tokens_used' => $totalTokens,
+                'cost_usd' => $totalTokens && $kosPer1k > 0
+                    ? round($totalTokens / 1000 * $kosPer1k, 4) : null,
                 'bil_baris' => $bilBaris,
                 'bil_auto_padan' => $dipadan,
                 'error_text' => null,
@@ -168,7 +179,7 @@ class ProsesPenyataAi implements ShouldQueue
 
             $audit->log('UPDATE', 'penyata_semakan', null, [
                 'batch' => $batch->id, 'bil_baris' => $bilBaris, 'auto_padan' => $dipadan,
-                'bil_langkau_duplikat' => $bilLangkau, 'tokens' => $hasil->tokensUsed,
+                'bil_langkau_duplikat' => $bilLangkau, 'tokens' => $totalTokens,
             ], $batch->id, masjidId: $masjidId);
 
             // Webhook best-effort (kegagalan tidak memusnahkan batch yang siap).
@@ -186,6 +197,66 @@ class ProsesPenyataAi implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Ekstrak baris + jumlah token. PDF IMBASAN berbilang-muka → pecah kepada imej
+     * setiap muka (Poppler) dan OCR SATU MUKA satu panggilan supaya SEMUA transaksi
+     * dibaca (model vision hanya baca muka pertama bila PDF penuh dihantar terus).
+     * Imej tunggal / PDF tanpa Poppler → satu panggilan (fallback).
+     *
+     * @return array{0: array, 1: int}  [$lines, $totalTokens]
+     */
+    private function ekstrakBaris(PenyataSemakan $batch, $extractor, PdfRenderService $pdf, string $prompt): array
+    {
+        // Imej tunggal, ATAU PDF tetapi Poppler tiada → satu panggilan.
+        if ($batch->mime !== 'application/pdf' || !$pdf->tersedia()) {
+            $bytes = Storage::disk('local')->get($batch->file_path);
+            if ($bytes === null) {
+                throw new AiException('Fail penyata tidak ditemui: '.$batch->file_path);
+            }
+            $r = $extractor->extractStatement($bytes, $batch->mime, $prompt);
+
+            return [$r->lines, (int) $r->tokensUsed];
+        }
+
+        // PDF imbasan → render setiap muka ke imej, OCR satu-satu, gabung.
+        $absPdf = Storage::disk('local')->path($batch->file_path);
+        $tmpDir = storage_path('app/penyata-ai-tmp'.DIRECTORY_SEPARATOR.$batch->id);
+        $lines = [];
+        $totalTokens = 0;
+
+        try {
+            $imej = $pdf->renderKeImej($absPdf, $tmpDir);
+            if (empty($imej)) {
+                throw new AiException('Tiada muka dapat dirender daripada PDF.');
+            }
+
+            // Tahan-ralat per-muka: kegagalan satu muka (rate-limit/timeout) TIDAK
+            // membuang muka lain — log & teruskan. GAGAL muktamad hanya jika SEMUA
+            // muka gagal (baris kosong → dilempar oleh pemanggil).
+            foreach ($imej as $img) {
+                $b = @file_get_contents($img);
+                if ($b === false) {
+                    continue;
+                }
+                try {
+                    $r = $extractor->extractStatement($b, 'image/jpeg', $prompt);
+                    $lines = array_merge($lines, $r->lines);
+                    $totalTokens += (int) $r->tokensUsed;
+                } catch (\Throwable $e) {
+                    report($e); // log muka gagal, teruskan muka seterusnya
+                }
+            }
+        } finally {
+            // Buang imej sementara (elak longgokan cakera).
+            foreach (glob($tmpDir.DIRECTORY_SEPARATOR.'*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($tmpDir);
+        }
+
+        return [$lines, $totalTokens];
     }
 
     /** Dipanggil Laravel HANYA selepas semua percubaan habis — GAGAL membebaskan kuota. */

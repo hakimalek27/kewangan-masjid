@@ -27,6 +27,10 @@ class SmokeSemuaHalamanTest extends TestCase
             'password_hash' => Hash::make('rahsia123'), 'is_active' => 1,
         ]);
 
+        // "Masuk" masjid supaya admin dalam mod dalam-tenant → halaman kewangan
+        // dirender penuh (200), bukan dialih ke Konsol (mod penyedia).
+        $this->adminMasuk($admin);
+
         // Route GET dengan parameter wajib — beri nilai sebenar
         $kutipanId = \App\Models\Kutipan::withoutMasjidScope()->where('status', 'ACTIVE')->value('id');
         $bayaranId = \App\Models\Pembayaran::withoutMasjidScope()->where('status', 'ACTIVE')->value('id');

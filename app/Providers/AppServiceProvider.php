@@ -66,13 +66,19 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.app', function ($view) {
             $user = auth()->user();
             $senarai = collect();
+            $modProvider = false;
             if ($user) {
                 $ids = $user->accessibleMasjidIds();
                 if (count($ids) > 1) {
                     $senarai = Masjid::whereIn('id', $ids)->orderBy('nama')->get(['id', 'nama']);
                 }
+                // Superadmin dalam MOD PENYEDIA (belum "Masuk" masjid) → papar jenama
+                // SISTEM (bukan nama tenant): sistem ini milik penyedia, bukan Al-Muttaqin.
+                $modProvider = $user->role === \App\Enums\UserRole::ADMIN
+                    && ! session()->has('selected_masjid_id');
             }
             $view->with('masjidSenarai', $senarai);
+            $view->with('modProvider', $modProvider);
         });
     }
 }

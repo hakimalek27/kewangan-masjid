@@ -19,19 +19,23 @@ class RoleMiddleware
 
         $role = $user->role->value;
 
-        // Superadmin (admin) lepas SEMUA pagar peranan — akses penuh baca+tulis
-        // semua tenant (keputusan reka bentuk). Tulis melalui pagar bukan-admin
-        // direkodkan sebagai ADMIN_OVERRIDE untuk jejak keselamatan.
+        // Superadmin (admin) = PENYEDIA (provider). Boleh BACA semua tenant
+        // (lihat/audit + tukar-masjid) dan urus fungsi peringkat-SISTEM (route
+        // yang secara eksplisit izinkan 'admin': konsol, /admin/*, onboarding,
+        // tetapan API/AI, urus pengguna). TETAPI TIDAK menyentuh kewangan/tetapan
+        // tenant — tulis (kaedah tidak-selamat) melalui pagar bukan-admin DIHALANG
+        // (pengasingan penyedia-vs-penyewa; keputusan reka bentuk 8 Jul 2026).
         if ($role === \App\Enums\UserRole::ADMIN->value) {
-            if (!in_array('admin', $roles, true) && !$request->isMethodSafe()) {
-                app(SecurityEventService::class)->log(
-                    'ADMIN_OVERRIDE',
-                    'Admin menulis melalui pagar ['.implode(',', $roles).'] di '.$request->path(),
-                    'LOW'
-                );
+            if ($request->isMethodSafe() || in_array('admin', $roles, true)) {
+                return $next($request);
             }
 
-            return $next($request);
+            app(SecurityEventService::class)->log(
+                'PERMISSION_DENIED',
+                'Superadmin (provider) cuba menulis melalui pagar ['.implode(',', $roles).'] di '.$request->path(),
+                'MEDIUM'
+            );
+            abort(403, 'Superadmin (penyedia) tidak menyentuh kewangan/tetapan tenant.');
         }
 
         if (!in_array($role, $roles, true)) {

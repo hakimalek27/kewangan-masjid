@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Masjid;
 use App\Models\PenyataSemakan;
+use App\Models\SpProvider;
 use App\Services\Ai\KuotaPenyataService;
 use App\Services\Security\AuditTrailService;
 use App\Services\Security\SecretVaultService;
@@ -43,12 +44,22 @@ class SemakPenyataAdminController extends Controller
             'baki' => $this->kuota->remaining($m->id),
         ]);
 
+        $providers = SpProvider::orderByDesc('is_default')->orderBy('nama')->get()
+            ->map(fn ($p) => (object) [
+                'id' => $p->id, 'nama' => $p->nama, 'model' => $p->model,
+                'base_url' => $p->base_url, 'is_active' => $p->is_active, 'is_default' => $p->is_default,
+                'catatan' => $p->catatan,
+                'keyMasked' => $p->api_key_ref ? $this->vault->masked($p->api_key_ref) : null,
+            ]);
+
         return view('admin.semak-penyata', [
             'aktif' => $this->kuota->globallyEnabled(),
             'keyMasked' => $keyRef ? $this->vault->masked($keyRef) : null,
             'model' => Setting::get('sp_ai_model', 'gpt-4o', self::G),
             'baseUrl' => Setting::get('sp_ai_base_url', null, self::G),
             'kosPer1k' => Setting::get('sp_kos_per_1k_usd', null, self::G),
+            'providers' => $providers,
+            'aiKatalog' => config('spkm.ai_provider_catalog', []),
             'tenants' => $tenants,
             'log' => PenyataSemakan::withoutMasjidScope()
                 ->orderByDesc('id')
@@ -96,6 +107,68 @@ class SemakPenyataAdminController extends Controller
 
         return redirect()->route('admin.semakpenyata')
             ->with('success', 'Konfigurasi AI pusat disimpan (kunci dalam vault tersulit).');
+    }
+
+    /**
+     * Simpan/kemas kini satu PROFIL provider Semak Penyata (OpenAI/DeepSeek/Ollama/
+     * OpenRouter/custom — semua serasi-OpenAI). Kunci API → vault; hanya SATU default.
+     */
+    public function simpanProvider(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'id' => ['nullable', 'integer', 'exists:sp_provider,id'],
+            'nama' => ['required', 'string', 'max:80'],
+            'model' => ['required', 'string', 'max:80'],
+            'base_url' => ['nullable', 'url:http,https', 'max:200'],
+            'api_key' => ['nullable', 'string', 'max:200'],
+            'catatan' => ['nullable', 'string', 'max:200'],
+        ], [], ['nama' => 'Nama Provider', 'model' => 'Model', 'base_url' => 'Base URL']);
+
+        $provider = !empty($data['id']) ? SpProvider::findOrFail($data['id']) : new SpProvider();
+
+        if (!empty($data['api_key'])) {
+            $provider->api_key_ref = $this->vault->put($data['api_key'], $provider->api_key_ref);
+        } elseif (!$provider->api_key_ref) {
+            return back()->with('error', 'Kunci API diperlukan untuk profil provider baharu.');
+        }
+
+        $provider->fill([
+            'nama' => $data['nama'],
+            'dialect' => 'openai', // semua provider serasi-OpenAI buat masa ini
+            'model' => $data['model'],
+            'base_url' => $data['base_url'] ?? null,
+            'is_active' => $request->boolean('is_active'),
+            'is_default' => $request->boolean('is_default'),
+            'catatan' => $data['catatan'] ?? null,
+        ]);
+        $provider->save();
+
+        // Satu default sahaja merentas semua profil.
+        if ($provider->is_default) {
+            SpProvider::where('id', '!=', $provider->id)->update(['is_default' => false]);
+        }
+
+        $this->audit->log(!empty($data['id']) ? 'UPDATE' : 'CREATE', 'sp_provider', null, [
+            'id' => $provider->id, 'nama' => $provider->nama, 'model' => $provider->model,
+        ], $provider->id);
+
+        return redirect()->route('admin.semakpenyata')
+            ->with('success', "Profil provider '{$provider->nama}' disimpan.");
+    }
+
+    /** Padam satu profil provider (kunci vault turut dibuang; label batch lama kekal). */
+    public function padamProvider(SpProvider $provider): RedirectResponse
+    {
+        $nama = $provider->nama;
+        if ($provider->api_key_ref) {
+            $this->vault->forget($provider->api_key_ref);
+        }
+        $provider->delete();
+
+        $this->audit->log('DELETE', 'sp_provider', ['nama' => $nama], null, $provider->id);
+
+        return redirect()->route('admin.semakpenyata')
+            ->with('success', "Profil provider '{$nama}' dipadam.");
     }
 
     /** Ubah had kuota bulanan satu tenant (0 = matikan ciri untuk tenant itu). */

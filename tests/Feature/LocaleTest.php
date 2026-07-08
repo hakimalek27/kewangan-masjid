@@ -31,7 +31,8 @@ class LocaleTest extends TestCase
 
     public function test_bahasa_inggeris_papar_terjemahan(): void
     {
-        $this->withSession(['lang' => 'en']);
+        // 'selected_masjid_id' → admin dalam mod dalam-tenant (halaman kewangan dirender).
+        $this->withSession(['lang' => 'en', 'selected_masjid_id' => (int) config('spkm.masjid_id')]);
 
         // Sidebar + dropdown bahasa wujud
         $this->actingAs($this->pengguna)->get(route('dashboard'))
@@ -53,7 +54,7 @@ class LocaleTest extends TestCase
 
     public function test_bahasa_melayu_papar_teks_asal(): void
     {
-        $this->withSession(['lang' => 'ms']);
+        $this->withSession(['lang' => 'ms', 'selected_masjid_id' => (int) config('spkm.masjid_id')]);
 
         $this->actingAs($this->pengguna)->get(route('tetapan.wizard'))
             ->assertOk()

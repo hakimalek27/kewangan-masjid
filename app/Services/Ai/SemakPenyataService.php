@@ -29,10 +29,22 @@ class SemakPenyataService
     ) {
     }
 
-    /** Muat naik penyata → cipta batch UPLOADED + dispatch job AI. */
-    public function muatNaik(int $bankAccountId, UploadedFile $fail): PenyataSemakan
+    /**
+     * Muat naik penyata → cipta batch UPLOADED + dispatch job AI.
+     * $spProviderId = profil provider pilihan (null → guna default aktif) supaya
+     * penyata sama boleh discan oleh provider berbeza untuk BANDING kualiti OCR.
+     */
+    public function muatNaik(int $bankAccountId, UploadedFile $fail, ?int $spProviderId = null): PenyataSemakan
     {
         $masjidId = (int) app('current.masjid_id');
+
+        // Selesaikan provider pilihan → default aktif jika tiada. 0 = legasi (tiada profil).
+        if (!$spProviderId) {
+            $spProviderId = \App\Models\SpProvider::aktif()->value('id');
+        }
+        $provider = $spProviderId ? \App\Models\SpProvider::find($spProviderId) : null;
+        $providerId = (int) ($provider?->id ?? 0);
+        $providerLabel = $provider?->label();
 
         // Kunci per-masjid: semakan kuota + cipta batch mesti atomik — halang
         // dua muat naik selari memintas had (TOCTOU). Degrade: gagal mesra.
@@ -42,13 +54,13 @@ class SemakPenyataService
         }
 
         try {
-            return $this->muatNaikDalamKunci($bankAccountId, $fail, $masjidId);
+            return $this->muatNaikDalamKunci($bankAccountId, $fail, $masjidId, $providerId, $providerLabel);
         } finally {
             $lock->release();
         }
     }
 
-    private function muatNaikDalamKunci(int $bankAccountId, UploadedFile $fail, int $masjidId): PenyataSemakan
+    private function muatNaikDalamKunci(int $bankAccountId, UploadedFile $fail, int $masjidId, int $providerId, ?string $providerLabel): PenyataSemakan
     {
         if (!$this->kuota->boleh($masjidId)) {
             $baki = $this->kuota->remaining($masjidId);
@@ -64,7 +76,8 @@ class SemakPenyataService
         $bank = BankAccount::findOrFail($bankAccountId);
 
         $hash = hash_file('sha256', $fail->getRealPath());
-        $wujud = PenyataSemakan::where('file_hash', $hash)->first();
+        // Dedup PER-provider: penyata sama boleh discan sekali setiap provider (banding).
+        $wujud = PenyataSemakan::where('file_hash', $hash)->where('sp_provider_id', $providerId)->first();
 
         // Batch GAGAL tidak mengunci fail — guna semula baris sama (patuh
         // UNIQUE uq_ps_hash): reset ke UPLOADED, buang baris/fail lama, dispatch semula.
@@ -72,14 +85,16 @@ class SemakPenyataService
             return $this->cubaSemula($wujud, $fail, $masjidId);
         }
         if ($wujud) {
-            throw new InvalidArgumentException('Penyata ini telah dimuat naik sebelum ini (batch #'.$wujud->id.').');
+            throw new InvalidArgumentException('Penyata ini telah dimuat naik dengan provider yang sama sebelum ini (batch #'.$wujud->id.'). Pilih provider lain untuk banding.');
         }
 
         $ext = $this->extDariMime($fail);
 
-        $batch = DB::transaction(function () use ($bank, $fail, $hash, $ext, $masjidId) {
+        $batch = DB::transaction(function () use ($bank, $fail, $hash, $ext, $masjidId, $providerId, $providerLabel) {
             $batch = PenyataSemakan::create([
                 'bank_account_id' => $bank->id,
+                'sp_provider_id' => $providerId,
+                'provider_label' => $providerLabel,
                 'file_path' => '', // diisi selepas ada id
                 'original_name' => mb_substr($fail->getClientOriginalName(), 0, 200),
                 'mime' => $fail->getMimeType() ?: 'application/octet-stream',
@@ -88,8 +103,8 @@ class SemakPenyataService
                 'uploaded_by' => app()->bound('current.user_id') ? app('current.user_id') : null,
             ]);
 
-            $path = 'penyata-ai/'.$masjidId.'/'.$batch->id.'.'.$ext;
-            Storage::disk('local')->put($path, file_get_contents($fail->getRealPath()));
+            // Stream fail ke disk (putFileAs) — elak muat keseluruhan (≤100MB) ke memori.
+            $path = Storage::disk('local')->putFileAs('penyata-ai/'.$masjidId, $fail, $batch->id.'.'.$ext);
             $batch->update(['file_path' => $path]);
 
             return $batch;
@@ -114,8 +129,7 @@ class SemakPenyataService
                 Storage::disk('local')->delete($batch->file_path);
             }
 
-            $path = 'penyata-ai/'.$masjidId.'/'.$batch->id.'.'.$this->extDariMime($fail);
-            Storage::disk('local')->put($path, file_get_contents($fail->getRealPath()));
+            $path = Storage::disk('local')->putFileAs('penyata-ai/'.$masjidId, $fail, $batch->id.'.'.$this->extDariMime($fail));
 
             $batch->update([
                 'status' => 'UPLOADED',
@@ -223,6 +237,93 @@ class SemakPenyataService
                 $line->id);
 
             return ['jenis' => $jenis, 'recno' => $rekod->id, 'voucher_id' => $rekod->voucher_id];
+        });
+    }
+
+    /**
+     * Rekod BEBERAPA baris sebagai SATU rekod lump-sum (cth longgok infaq QR kecil
+     * hari sama jadi satu kutipan). Semua baris mesti SATU sisi (semua masuk ATAU
+     * semua keluar) & akaun bank sama. Pulangkan ['jenis','recno','voucher_id','bil','jumlah'].
+     */
+    public function rekodLumpSum(array $lineIds, array $data): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $lineIds)));
+        if (count($ids) < 2) {
+            throw new InvalidArgumentException('Pilih sekurang-kurangnya 2 baris untuk dilonggok.');
+        }
+
+        $coaId = (int) ($data['coa_id'] ?? 0);
+        if ($coaId <= 0) {
+            throw new InvalidArgumentException('Sila pilih kod akaun (COA).');
+        }
+
+        return DB::transaction(function () use ($ids, $data, $coaId) {
+            // Kunci semua baris DALAM transaksi — halang klik berganda / longgok bertindih.
+            $lines = BankStatementLine::whereIn('id', $ids)->lockForUpdate()->get();
+            if ($lines->count() !== count($ids)) {
+                throw new InvalidArgumentException('Sebahagian baris tidak dijumpai.');
+            }
+
+            $masuk = null;
+            $bankId = null;
+            $total = 0.0;
+            foreach ($lines as $line) {
+                $this->pastikanBolehRekod($line); // batch SEDIA masjid semasa + UNMATCHED
+                $sisi = (float) $line->kredit > 0;
+                if ($masuk === null) {
+                    $masuk = $sisi;
+                } elseif ($masuk !== $sisi) {
+                    throw new InvalidArgumentException('Semua baris dipilih mesti SAMA jenis (semua masuk ATAU semua keluar).');
+                }
+                if ($bankId === null) {
+                    $bankId = (int) $line->bank_account_id;
+                } elseif ($bankId !== (int) $line->bank_account_id) {
+                    throw new InvalidArgumentException('Baris dari akaun bank berbeza tidak boleh dilonggok bersama.');
+                }
+                $total += $masuk ? (float) $line->kredit : (float) $line->debit;
+            }
+
+            // Kuatkuasa keluarga COA di PELAYAN (sama seperti rekodBaris).
+            $kod = (string) \App\Models\Coa::whereKey($coaId)->value('kod');
+            $sah = $masuk
+                ? (str_starts_with($kod, '400-') || str_starts_with($kod, '450-') || str_starts_with($kod, '300-04'))
+                : (str_starts_with($kod, '600-') || str_starts_with($kod, '650-'));
+            if (!$sah) {
+                throw new InvalidArgumentException($masuk
+                    ? 'Wang masuk mesti direkod ke kod hasil (400/450) atau tabung (300-04xxx).'
+                    : 'Wang keluar mesti direkod ke kod belanja (600/650).');
+            }
+
+            $tarikh = $data['tarikh'] ?? now()->format('Y-m-d');
+            $jumlah = number_format($total, 2, '.', '');
+            $deskripsi = $data['deskripsi'] ?? ($masuk ? 'Longgokan kutipan (QR/infaq)' : 'Longgokan bayaran');
+
+            if ($masuk) {
+                $rekod = $this->kutipan->create([
+                    'jenis' => 'BIASA', 'tarikh' => $tarikh, 'coa_id' => $coaId,
+                    'kaedah' => 'BANK_TRANSFER_QR', 'jumlah' => $jumlah, 'auto_resit' => true,
+                    'nama_pemberi' => $data['penerima'] ?? null, 'bank_account_id' => $bankId,
+                    'deskripsi' => $deskripsi,
+                ]);
+            } else {
+                $rekod = $this->pembayaran->createBayaran([
+                    'tar_lulus' => $tarikh, 'coa_id' => $coaId, 'jumlah' => $jumlah,
+                    'cara_bayar' => 'EFT', 'auto_baucer' => true, 'pemohon' => $data['penerima'] ?? null,
+                    'deskripsi' => $deskripsi, 'bank_account_id' => $bankId,
+                ]);
+            }
+
+            // Tandakan SEMUA baris dipilih MATCHED ke voucher lump-sum ini.
+            BankStatementLine::whereIn('id', $ids)
+                ->update(['status' => 'MATCHED', 'matched_voucher_id' => $rekod->voucher_id]);
+
+            $this->audit->log('UPDATE', 'bank_statement_line', null, [
+                'lump_sum' => true, 'bil_baris' => count($ids), 'jenis' => $masuk ? 'KUTIPAN' : 'BAYARAN',
+                'recno' => $rekod->id, 'voucher' => $rekod->voucher_id, 'jumlah' => $jumlah,
+            ], null);
+
+            return ['jenis' => $masuk ? 'KUTIPAN' : 'BAYARAN', 'recno' => $rekod->id,
+                'voucher_id' => $rekod->voucher_id, 'bil' => count($ids), 'jumlah' => $jumlah];
         });
     }
 

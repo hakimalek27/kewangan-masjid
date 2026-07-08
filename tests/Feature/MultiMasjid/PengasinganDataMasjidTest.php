@@ -23,8 +23,9 @@ use Tests\TestCase;
  *  (3) Penukar masjid (admin) menggerakkan KONTEKS data — selepas tukar ke B, hanya data B
  *      kelihatan; tukar balik ke 49, hanya data 49.
  *  (4) COA disemai = definisi sahaja (tiada baki/jurnal/transaksi) & templat tidak tercemar.
- *  (5) Matriks peranan — admin/bendahari boleh tulis; pengerusi/setiausaha/juruaudit/viewer
- *      disekat tulis (403); juruaudit boleh baca borang, viewer dialih ke penyata.
+ *  (5) Matriks peranan — BENDAHARI boleh tulis; admin (penyedia)/pengerusi/setiausaha/
+ *      juruaudit/viewer disekat tulis kewangan (403); admin & juruaudit boleh baca borang,
+ *      viewer dialih ke penyata.
  */
 class PengasinganDataMasjidTest extends TestCase
 {
@@ -126,10 +127,11 @@ class PengasinganDataMasjidTest extends TestCase
     }
 
     /**
-     * B5 — bendahari masjid A TIDAK boleh menugaskan pemerhati ke masjid B melalui
-     * masjid_ids (kebocoran baca silang-penyewa). Pivot mesti ditapis ke masjid pelaku.
+     * B5 (kini ditutup di peringkat pagar) — bendahari tenant TIDAK lagi boleh langsung
+     * mengakses laluan urus-pengguna, jadi vektor menugaskan pemerhati silang-penyewa
+     * melalui masjid_ids terus DIHALANG (403) sebelum sampai ke controller.
      */
-    public function test_bendahari_tak_boleh_tugas_pemerhati_ke_masjid_lain(): void
+    public function test_bendahari_disekat_urus_pengguna_menutup_vektor_b5(): void
     {
         app()->instance('current.masjid_id', $this->home);
 
@@ -139,14 +141,10 @@ class PengasinganDataMasjidTest extends TestCase
             'role'       => 'viewer',
             'masjid_ids' => [$this->masjidB],   // cuba beri akses masjid B
             'kata_laluan' => 'rahsia123',
-        ])->assertSessionHasNoErrors();
+        ])->assertForbidden();
 
-        $viewer = AppUser::where('nama_penuh', 'Pemerhati Ujian')->latest('id')->firstOrFail();
-
-        // Pivot TIDAK mengandungi masjid B → tiada akses silang-penyewa.
-        $this->assertNotContains($this->masjidB, $viewer->accessibleMasjidIds(),
-            'Bendahari berjaya beri pemerhati akses masjid lain (kebocoran B5).');
-        $this->assertFalse($viewer->canAccessMasjid($this->masjidB));
+        // Tiada pemerhati langsung dicipta — vektor kebocoran ditutup di pagar route.
+        $this->assertNull(AppUser::where('nama_penuh', 'Pemerhati Ujian')->first());
     }
 
     /* ------------------------------------------ (3) Penukar masjid (konteks) */
@@ -156,7 +154,8 @@ class PengasinganDataMasjidTest extends TestCase
         $kA = $this->buatKutipan($this->bendahariA, $this->coaId('400-03010'));
         $kB = $this->buatKutipan($this->bendahariB, $this->coaIdMasjid($this->masjidB, '400-03010'));
 
-        // Admin (home 49) — nampak 49, bukan B
+        // Admin "Masuk" masjid home (49) — mod dalam-tenant → nampak 49, bukan B
+        $this->adminMasuk($this->admin, $this->home);
         $this->actingAs($this->admin)->get(route('kutipan.view', $kA->id))->assertOk();
         $this->actingAs($this->admin)->get(route('kutipan.view', $kB->id))->assertNotFound();
 
@@ -226,13 +225,16 @@ class PengasinganDataMasjidTest extends TestCase
             'jumlah' => '5.00', 'auto_resit' => '1', 'semakan' => '1',
         ];
 
-        // BOLEH tulis kewangan: BENDAHARI (maker) + ADMIN (superadmin akses penuh)
-        foreach (['bendahari', 'admin'] as $role) {
-            $u = $this->buatUser($role, $this->home);
-            $this->actingAs($u)->post(route('kutipan.simpan'), $data)->assertSessionHasNoErrors();
-        }
+        // BOLEH tulis kewangan: BENDAHARI (maker) sahaja
+        $bdh = $this->buatUser('bendahari', $this->home);
+        $this->actingAs($bdh)->post(route('kutipan.simpan'), $data)->assertSessionHasNoErrors();
 
-        // DISEKAT tulis (403): pentadbir (pentadbir masjid), pengerusi, setiausaha, juruaudit, viewer
+        // Admin (penyedia) — walau sudah "Masuk" masjid (mod dalam-tenant), tulis kewangan tetap 403.
+        $admin = $this->buatUser('admin', $this->home);
+        $this->adminMasuk($admin, $this->home);
+        $this->actingAs($admin)->post(route('kutipan.simpan'), $data)->assertForbidden();
+
+        // DISEKAT tulis (403): pentadbir, pengerusi, setiausaha, juruaudit, viewer
         foreach (['pentadbir', 'pengerusi', 'setiausaha', 'juruaudit', 'viewer'] as $role) {
             $u = $this->buatUser($role, $this->home);
             $this->actingAs($u)->post(route('kutipan.simpan'), $data)
@@ -242,8 +244,13 @@ class PengasinganDataMasjidTest extends TestCase
 
     public function test_matriks_peranan_baca_borang_kutipan(): void
     {
-        // BOLEH baca borang: admin, bendahari, pengerusi, setiausaha, juruaudit
-        foreach (['admin', 'bendahari', 'pengerusi', 'setiausaha', 'juruaudit'] as $role) {
+        // Admin: perlu "Masuk" masjid dahulu (mod dalam-tenant) untuk baca borang kewangan.
+        $admin = $this->buatUser('admin', $this->home);
+        $this->adminMasuk($admin, $this->home);
+        $this->actingAs($admin)->get(route('kutipan.baru'))->assertOk();
+
+        // BOLEH baca borang: bendahari, pengerusi, setiausaha, juruaudit
+        foreach (['bendahari', 'pengerusi', 'setiausaha', 'juruaudit'] as $role) {
             $u = $this->buatUser($role, $this->home);
             $this->actingAs($u)->get(route('kutipan.baru'))->assertOk();
         }

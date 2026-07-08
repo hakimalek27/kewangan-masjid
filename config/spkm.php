@@ -15,6 +15,14 @@ return [
     // (Windows/XAMPP cth: C:\Users\hakim\xampp\mysql\bin\mysqldump.exe)
     'mysqldump_path' => env('MYSQLDUMP_PATH', 'mysqldump'),
 
+    // Semak Penyata (AI) — folder bin Poppler (pdftoppm/pdfinfo) untuk pecah PDF
+    // imbasan (scan) kepada imej setiap muka sebelum OCR. Kosong = guna PATH.
+    // Windows winget: ...\WinGet\Packages\oschwartz10612.Poppler_*\poppler-*\Library\bin
+    'poppler_bin' => env('POPPLER_BIN', 'C:\Users\hakim\AppData\Local\Microsoft\WinGet\Packages\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\poppler-25.07.0\Library\bin'),
+    // DPI render muka PDF (150 = seimbang kejelasan vs saiz); pages per panggilan AI.
+    'penyata_dpi' => (int) env('SPKM_PENYATA_DPI', 150),
+    'penyata_pages_per_call' => (int) env('SPKM_PENYATA_PAGES_PER_CALL', 1),
+
     // Siri penomboran (jadual number_sequence) — kaunter berasingan setiap siri
     'siri' => ['RESIT', 'PV', 'PWR', 'JNL', 'VKUTIPAN'],
 
@@ -24,6 +32,30 @@ return [
         'tunai_di_tangan' => '250-06000',
         'akaun_sementara' => '300-99990',
         'susut_nilai'     => '650-10000',
+    ],
+
+    /*
+     | Katalog provider AI untuk "Semak Penyata (AI)" — dropdown di /admin/semak-penyata.
+     | base_url TANPA '/v1/chat/completions' (OpenAiDialect tambah sendiri). Semua
+     | serasi-OpenAI. Pilih provider → auto-isi base_url + senarai model. 'custom'
+     | membenarkan taip URL & model sendiri. Model MESTI sokong vision untuk OCR.
+     */
+    'ai_provider_catalog' => [
+        ['key' => 'openai', 'label' => 'OpenAI', 'base_url' => '',
+            'models' => ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'], 'pdf' => true],
+        ['key' => 'openrouter', 'label' => 'OpenRouter', 'base_url' => 'https://openrouter.ai/api',
+            'models' => ['openai/gpt-4o', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001',
+                'anthropic/claude-3.5-sonnet', 'qwen/qwen-2-vl-72b-instruct', 'meta-llama/llama-3.2-90b-vision-instruct'], 'pdf' => false],
+        ['key' => 'deepseek', 'label' => 'DeepSeek (teks — bukan OCR)', 'base_url' => 'https://api.deepseek.com',
+            'models' => ['deepseek-chat'], 'pdf' => false],
+        ['key' => 'ollama', 'label' => 'Ollama (local)', 'base_url' => 'http://localhost:11434',
+            'models' => ['llama3.2-vision', 'llava', 'llava:13b', 'minicpm-v', 'moondream'], 'pdf' => false],
+        ['key' => 'groq', 'label' => 'Groq', 'base_url' => 'https://api.groq.com/openai',
+            'models' => ['llama-3.2-90b-vision-preview', 'llama-3.2-11b-vision-preview'], 'pdf' => false],
+        ['key' => 'mistral', 'label' => 'Mistral', 'base_url' => 'https://api.mistral.ai',
+            'models' => ['pixtral-large-latest', 'pixtral-12b-2409'], 'pdf' => false],
+        ['key' => 'custom', 'label' => 'Custom (taip URL & model sendiri)', 'base_url' => '',
+            'models' => [], 'pdf' => false],
     ],
 
     /*
@@ -55,7 +87,6 @@ return [
                 ['Log Ralat', 'admin.ralat'],
                 ['Keselamatan', 'admin.keselamatan'],
                 ['Backup Luar Tapak', 'admin.backup'],
-                ['Dual-Write SPPKMS', 'admin.dualwrite'],
                 ['Semak Penyata (AI) — Kawalan', 'admin.semakpenyata'],
             ],
         ],
@@ -182,6 +213,7 @@ return [
                 ['Set Kod Penerimaan/Perbelanjaan', 'tetapan.mapping'],
                 ['Carian Padanan Kod Akaun', 'tetapan.semak'],
                 ['Info Masjid', 'tetapan.masjid'],
+                ['Dual-Write SPPKMS', 'tetapan.dualwrite'],
                 ['Tukar Kata Laluan', 'tetapan.katalaluan'],
                 ['Pengurusan Pengguna', 'tetapan.pengguna'],
             ],

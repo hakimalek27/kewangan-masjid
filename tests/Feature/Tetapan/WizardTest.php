@@ -29,8 +29,10 @@ class WizardTest extends TestCase
 
     public function test_wizard_papar_status_langkah(): void
     {
-        // DB sejarah sudah ada bank + mapping + siri → sekurang-kurangnya separa siap
-        $this->actingAs($this->pengguna('admin'))
+        // Wizard = halaman tetapan tenant → admin mesti "Masuk" masjid dahulu (mod dalam-tenant).
+        $admin = $this->pengguna('admin');
+        $this->adminMasuk($admin);
+        $this->actingAs($admin)
             ->get(route('tetapan.wizard'))
             ->assertOk()
             ->assertSee('Kemajuan Setup')

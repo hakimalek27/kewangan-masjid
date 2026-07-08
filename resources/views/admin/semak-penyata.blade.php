@@ -3,6 +3,116 @@
 @section('title', __('Semak Penyata (AI) — Kawalan'))
 
 @section('content')
+    {{-- Profil provider AI berbilang — banding kualiti OCR (OpenAI/DeepSeek/Ollama/OpenRouter) --}}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-robot me-1"></i>{{ __('Profil Provider AI (Semak Penyata)') }}</span>
+            <span class="small text-muted">{{ __('Provider bertanda ⭐ Default digunakan oleh SEMUA tenant') }}</span>
+        </div>
+        <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger py-2 small">{{ $errors->first() }}</div>
+            @endif
+            <p class="small text-muted mb-2">
+                <i class="bi bi-info-circle me-1"></i>{{ __('Simpan profil untuk setiap provider (OpenAI/DeepSeek/Ollama/OpenRouter). Tandakan SATU sebagai Default — itulah provider + kunci yang SEMUA tenant guna untuk scan penyata. Tukar Default untuk banding.') }}
+            </p>
+            @unless ($providers->firstWhere('is_default', true))
+                <div class="alert alert-warning py-2 small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>{{ __('Belum ada provider Default — tenant tidak boleh scan penyata sehingga satu profil ditanda Default.') }}</div>
+            @endunless
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>{{ __('Nama') }}</th><th>{{ __('Model') }}</th><th>{{ __('Base URL') }}</th>
+                            <th>{{ __('Kunci') }}</th><th class="text-center">{{ __('Aktif') }}</th>
+                            <th class="text-center">{{ __('Default') }}</th><th class="text-end">{{ __('Tindakan') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($providers as $p)
+                            <tr>
+                                <td class="fw-semibold">{{ $p->nama }}</td>
+                                <td><code>{{ $p->model }}</code></td>
+                                <td class="small text-muted">{{ $p->base_url ?: 'https://api.openai.com' }}</td>
+                                <td class="small">{{ $p->keyMasked ?? '—' }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-{{ $p->is_active ? 'success' : 'secondary' }}">{{ $p->is_active ? __('Ya') : __('Tidak') }}</span>
+                                </td>
+                                <td class="text-center">@if ($p->is_default)<i class="bi bi-star-fill text-warning"></i>@endif</td>
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-prov"
+                                            data-id="{{ $p->id }}" data-nama="{{ $p->nama }}" data-model="{{ $p->model }}"
+                                            data-base="{{ $p->base_url }}" data-catatan="{{ $p->catatan }}"
+                                            data-active="{{ $p->is_active ? 1 : 0 }}" data-default="{{ $p->is_default ? 1 : 0 }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <form method="POST" action="{{ route('admin.semakpenyata.provider.padam', $p->id) }}" class="d-inline"
+                                          onsubmit="return confirm('{{ __('Padam profil') }} {{ $p->nama }}?')">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="text-center text-muted small">{{ __('Belum ada profil provider. Tambah di bawah.') }}</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <form method="POST" action="{{ route('admin.semakpenyata.provider') }}" class="row g-2 align-items-end">
+                @csrf
+                <input type="hidden" name="id" id="prov_id" value="">
+                <div class="col-md-3">
+                    <label class="form-label small mb-0" for="prov_preset">{{ __('Provider AI') }}</label>
+                    <select id="prov_preset" class="form-select form-select-sm">
+                        @foreach ($aiKatalog as $prov)
+                            <option value="{{ $prov['key'] }}" @selected($prov['key'] === 'openai')>{{ $prov['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0" for="prov_nama">{{ __('Nama profil') }}</label>
+                    <input type="text" name="nama" id="prov_nama" maxlength="80" required class="form-control form-control-sm" placeholder="cth OpenAI GPT-4o">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-0" for="prov_model_pilih">{{ __('Model') }}</label>
+                    <select id="prov_model_pilih" class="form-select form-select-sm mb-1"></select>
+                    <input type="text" name="model" id="prov_model" maxlength="80" required class="form-control form-control-sm" placeholder="{{ __('ID model sebenar — cth openai/gpt-4o') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0" for="prov_api_key">{{ __('Kunci API') }}</label>
+                    <input type="password" name="api_key" id="prov_api_key" maxlength="200" autocomplete="off" class="form-control form-control-sm" placeholder="{{ __('(kosong = kekal)') }}">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small mb-0" for="prov_base">{{ __('Base URL') }}</label>
+                    <input type="text" name="base_url" id="prov_base" maxlength="200" class="form-control form-control-sm" placeholder="{{ __('(kosong = OpenAI)') }}">
+                    <div id="prov_pdf_warn" class="form-text small text-danger d-none"><i class="bi bi-exclamation-triangle me-1"></i>{{ __('Provider ini mungkin tidak sokong PDF — muat naik IMEJ (JPG/PNG).') }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check form-check-inline">
+                        <input type="checkbox" name="is_active" id="prov_active" value="1" checked class="form-check-input">
+                        <label class="form-check-label small" for="prov_active">{{ __('Aktif') }}</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input type="checkbox" name="is_default" id="prov_default" value="1" class="form-check-input">
+                        <label class="form-check-label small" for="prov_default">{{ __('Default (semua tenant)') }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" name="catatan" id="prov_catatan" maxlength="200" class="form-control form-control-sm" placeholder="{{ __('Catatan (pilihan)') }}">
+                </div>
+                <div class="col-12 text-end">
+                    <button type="button" id="prov_reset" class="btn btn-sm btn-outline-secondary">{{ __('Kosongkan') }}</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>{{ __('Simpan Profil') }}</button>
+                </div>
+            </form>
+            <p class="form-text small mb-0 mt-2">
+                <i class="bi bi-info-circle me-1"></i>{{ __('Pilih Provider → URL & senarai model auto-isi. Model mesti sokong VISION untuk OCR. PDF hanya OpenAI sokong penuh — provider lain guna IMEJ (JPG/PNG).') }}
+            </p>
+        </div>
+    </div>
+
     <div class="row g-3">
         {{-- Kiri: toggle global + kunci pusat --}}
         <div class="col-xl-4">
@@ -175,4 +285,82 @@
             </div>
         </div>
     </div>
+
+    <script>
+        (function () {
+            var CATALOG = @json($aiKatalog);
+            var $ = function (id) { return document.getElementById(id); };
+            var preset = $('prov_preset'), modelPilih = $('prov_model_pilih'),
+                modelText = $('prov_model'), baseUrl = $('prov_base'), pdfWarn = $('prov_pdf_warn');
+            var CUSTOM = '__custom__';
+
+            function catalogByKey(key) { return CATALOG.filter(function (c) { return c.key === key; })[0]; }
+            function catalogByBase(base) {
+                base = (base || '').replace(/\/+$/, '');
+                return CATALOG.filter(function (c) { return c.key !== 'custom' && (c.base_url || '').replace(/\/+$/, '') === base; })[0];
+            }
+
+            // Isi senarai model + base_url ikut provider dipilih. keepModel=true kekalkan teks model semasa (mod edit).
+            function isiPreset(key, keepModel) {
+                var c = catalogByKey(key) || catalogByKey('custom');
+                if (c.key !== 'custom') { baseUrl.value = c.base_url || ''; }
+                else if (!keepModel) { baseUrl.value = ''; }
+                pdfWarn.classList.toggle('d-none', !!c.pdf); // amaran PDF kecuali provider yg sokong (OpenAI)
+
+                modelPilih.innerHTML = '';
+                (c.models || []).forEach(function (m) {
+                    var o = document.createElement('option'); o.value = m; o.textContent = m; modelPilih.appendChild(o);
+                });
+                var oc = document.createElement('option'); oc.value = CUSTOM; oc.textContent = '— taip model sendiri —'; modelPilih.appendChild(oc);
+
+                if (!keepModel) {
+                    if ((c.models || []).length) { modelText.value = c.models[0]; modelPilih.value = c.models[0]; }
+                    else { modelText.value = ''; modelPilih.value = CUSTOM; }
+                } else {
+                    // Edit: padankan model semasa dgn senarai; jika tiada → custom.
+                    modelPilih.value = (c.models || []).indexOf(modelText.value) >= 0 ? modelText.value : CUSTOM;
+                }
+            }
+
+            if (preset) {
+                preset.addEventListener('change', function () { isiPreset(preset.value, false); });
+                modelPilih.addEventListener('change', function () {
+                    if (modelPilih.value === CUSTOM) { modelText.value = ''; modelText.focus(); }
+                    else { modelText.value = modelPilih.value; }
+                });
+                isiPreset(preset.value, false); // muatan awal
+            }
+
+            document.querySelectorAll('.btn-edit-prov').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var d = btn.dataset;
+                    $('prov_id').value = d.id || '';
+                    $('prov_nama').value = d.nama || '';
+                    modelText.value = d.model || '';
+                    baseUrl.value = d.base || '';
+                    $('prov_catatan').value = d.catatan || '';
+                    $('prov_api_key').value = '';
+                    $('prov_active').checked = d.active === '1';
+                    $('prov_default').checked = d.default === '1';
+                    // Padankan provider ikut base_url; kekalkan model sedia ada.
+                    var match = (d.base ? catalogByBase(d.base) : catalogByKey('openai'));
+                    preset.value = match ? match.key : 'custom';
+                    isiPreset(preset.value, true);
+                    $('prov_nama').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    $('prov_nama').focus();
+                });
+            });
+
+            var reset = $('prov_reset');
+            if (reset) {
+                reset.addEventListener('click', function () {
+                    ['prov_id', 'prov_nama', 'prov_catatan', 'prov_api_key'].forEach(function (id) { $(id).value = ''; });
+                    $('prov_active').checked = true;
+                    $('prov_default').checked = false;
+                    preset.value = 'openai';
+                    isiPreset('openai', false);
+                });
+            }
+        })();
+    </script>
 @endsection

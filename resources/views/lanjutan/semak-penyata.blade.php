@@ -35,7 +35,7 @@
                             @error('bank_account_id')<div class="text-danger small">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small" for="fail">{{ __('Fail Penyata (PDF/JPG/PNG, maks 10MB)') }}</label>
+                            <label class="form-label small" for="fail">{{ __('Fail Penyata (PDF/JPG/PNG, maks 100MB)') }}</label>
                             <input type="file" name="fail" id="fail" accept=".pdf,.jpg,.jpeg,.png"
                                    class="form-control form-control-sm" required @disabled(!$kuotaOk)>
                             @error('fail')<div class="text-danger small">{{ $message }}</div>@enderror
@@ -117,10 +117,20 @@
 
                 {{-- KIRI: Belum Direkod --}}
                 <div class="card shadow-sm mb-3">
-                    <div class="card-header fw-bold bg-warning-subtle"><i class="bi bi-inbox me-1"></i>{{ __('Belum Direkod') }} ({{ $belum->count() }})</div>
+                    <div class="card-header fw-bold bg-warning-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span><i class="bi bi-inbox me-1"></i>{{ __('Belum Direkod') }} ({{ $belum->count() }})</span>
+                        <div id="lumpBar" class="d-none align-items-center gap-2">
+                            <span class="small"><strong id="lumpCount">0</strong> {{ __('dipilih') }} · RM <strong id="lumpSum">0.00</strong></span>
+                            <button type="button" class="btn btn-sm btn-primary" id="btnLumpSum" title="{{ __('Longgok baris dipilih jadi 1 rekod') }}">
+                                <i class="bi bi-collection me-1"></i>{{ __('Rekod Lump-Sum') }}
+                            </button>
+                            <span id="lumpMixWarn" class="small text-danger d-none">{{ __('Pilih satu jenis sahaja (masuk/keluar).') }}</span>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover align-middle mb-0">
                             <thead class="table-light"><tr>
+                                <th style="width:28px"><input type="checkbox" id="lumpAll" class="form-check-input" title="{{ __('Pilih semua') }}"></th>
                                 <th>{{ __('Tarikh') }}</th><th>{{ __('Deskripsi') }}</th>
                                 <th class="text-end">{{ __('Masuk') }}</th><th class="text-end">{{ __('Keluar') }}</th>
                                 <th>{{ __('Cadangan AI') }}</th><th class="text-end">{{ __('Tindakan') }}</th>
@@ -130,9 +140,14 @@
                                     @php
                                         $masuk = (float) $l->kredit > 0;
                                         $cadCoa = $l->cadangan_coa_id ? ($masuk ? $coaHasil : $coaBelanja)->firstWhere('id', $l->cadangan_coa_id) : null;
+                                        $tarikhStr = $l->tarikh instanceof \DateTimeInterface ? $l->tarikh->format('Y-m-d') : $l->tarikh;
                                     @endphp
                                     <tr>
-                                        <td><small>{{ $l->tarikh instanceof \DateTimeInterface ? $l->tarikh->format('Y-m-d') : $l->tarikh }}</small></td>
+                                        <td><input type="checkbox" class="form-check-input lump-chk"
+                                                   data-line="{{ $l->id }}" data-side="{{ $masuk ? 'masuk' : 'keluar' }}"
+                                                   data-amount="{{ $masuk ? $l->kredit : $l->debit }}" data-date="{{ $tarikhStr }}"
+                                                   data-coa="{{ $l->cadangan_coa_id }}"></td>
+                                        <td><small>{{ $tarikhStr }}</small></td>
                                         <td><small>{{ $l->deskripsi }}</small></td>
                                         <td class="text-end text-success">{{ $masuk ? number_format((float) $l->kredit, 2) : '' }}</td>
                                         <td class="text-end text-danger">{{ !$masuk ? number_format((float) $l->debit, 2) : '' }}</td>
@@ -160,7 +175,7 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="6" class="text-center text-muted py-3">{{ __('Semua baris telah direkod atau diabaikan.') }}</td></tr>
+                                    <tr><td colspan="7" class="text-center text-muted py-3">{{ __('Semua baris telah direkod atau diabaikan.') }}</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -239,6 +254,43 @@
         </div>
     </div>
 
+    {{-- Modal Lump-Sum (longgok banyak baris jadi 1 rekod) --}}
+    <div class="modal fade" id="modalLump" tabindex="-1">
+        <div class="modal-dialog">
+            <form method="POST" action="{{ route('semakpenyata.lumpsum') }}" id="formLump" class="modal-content">
+                @csrf
+                <input type="hidden" name="batch" value="{{ $batch?->id }}">
+                <div id="lumpIds"></div>
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ __('Rekod Lump-Sum (Longgok)') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-primary py-2 small mb-2">
+                        <i class="bi bi-collection me-1"></i><strong id="lm-bil">0</strong> {{ __('baris akan dilonggok jadi SATU rekod berjumlah') }} RM <strong id="lm-total">0.00</strong>.
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label small">{{ __('Jenis') }}</label><div><span class="badge" id="lm-jenis"></span></div></div>
+                        <div class="col"><label class="form-label small" for="lm-tarikh">{{ __('Tarikh') }} <span class="text-danger">*</span></label><input type="date" name="tarikh" id="lm-tarikh" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small" for="lm-coa">{{ __('Kod Akaun (COA)') }} <span class="text-danger">*</span></label>
+                        <select name="coa_id" id="lm-coa" class="form-select form-select-sm" required></select>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label small" for="lm-deskripsi">{{ __('Deskripsi') }}</label>
+                        <input type="text" name="deskripsi" id="lm-deskripsi" maxlength="500" class="form-control form-control-sm" placeholder="{{ __('cth Infaq/Sedekah QR') }}">
+                    </div>
+                    <input type="hidden" name="penerima" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ __('Batal') }}</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-collection me-1"></i>{{ __('Rekod Lump-Sum') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     @php
         $coaHasilJson = $coaHasil->map(fn ($c) => ['id' => $c->id, 't' => $c->kod.' — '.$c->nama])->values();
         $coaBelanjaJson = $coaBelanja->map(fn ($c) => ['id' => $c->id, 't' => $c->kod.' — '.$c->nama])->values();
@@ -295,6 +347,62 @@
                     modal.show();
                 });
             });
+
+            // ==== Lump-Sum: pilih banyak baris → longgok jadi 1 rekod ====
+            const lumpBar = document.getElementById('lumpBar');
+            const chks = Array.from(document.querySelectorAll('.lump-chk'));
+            const lumpAll = document.getElementById('lumpAll');
+            const btnLump = document.getElementById('btnLumpSum');
+            const lumpMixWarn = document.getElementById('lumpMixWarn');
+            const lumpModalEl = document.getElementById('modalLump');
+            const lumpModal = lumpModalEl ? new window.bootstrap.Modal(lumpModalEl) : null;
+
+            function terpilih() { return chks.filter(c => c.checked); }
+            function kemasBar() {
+                const sel = terpilih();
+                const mixed = new Set(sel.map(c => c.dataset.side)).size > 1;
+                const total = sel.reduce((s, c) => s + parseFloat(c.dataset.amount || 0), 0);
+                if (document.getElementById('lumpCount')) document.getElementById('lumpCount').textContent = sel.length;
+                if (document.getElementById('lumpSum')) document.getElementById('lumpSum').textContent = total.toFixed(2);
+                if (lumpBar) { lumpBar.classList.toggle('d-none', sel.length === 0); lumpBar.classList.toggle('d-flex', sel.length > 0); }
+                if (lumpMixWarn) lumpMixWarn.classList.toggle('d-none', !mixed);
+                if (btnLump) btnLump.disabled = mixed || sel.length < 2;
+            }
+            chks.forEach(c => c.addEventListener('change', kemasBar));
+            if (lumpAll) lumpAll.addEventListener('change', function () { chks.forEach(c => { c.checked = lumpAll.checked; }); kemasBar(); });
+
+            if (btnLump && lumpModal) {
+                btnLump.addEventListener('click', function () {
+                    const sel = terpilih();
+                    if (sel.length < 2) return;
+                    const masuk = sel[0].dataset.side === 'masuk';
+                    const jenis = masuk ? 'KUTIPAN' : 'BAYARAN';
+                    const total = sel.reduce((s, c) => s + parseFloat(c.dataset.amount || 0), 0);
+                    document.getElementById('lm-bil').textContent = sel.length;
+                    document.getElementById('lm-total').textContent = total.toFixed(2);
+                    const badge = document.getElementById('lm-jenis');
+                    badge.textContent = masuk ? '{{ __('Kutipan (Wang Masuk)') }}' : '{{ __('Belanja (Wang Keluar)') }}';
+                    badge.className = 'badge bg-' + (masuk ? 'success' : 'danger');
+                    const dates = new Set(sel.map(c => c.dataset.date));
+                    document.getElementById('lm-tarikh').value = dates.size === 1 ? sel[0].dataset.date : '';
+                    const selCoa = document.getElementById('lm-coa');
+                    selCoa.innerHTML = '';
+                    const cadDefault = sel[0].dataset.coa;
+                    (COA[jenis] || []).forEach(function (c) {
+                        const o = document.createElement('option'); o.value = c.id; o.textContent = c.t;
+                        if (String(c.id) === String(cadDefault)) o.selected = true;
+                        selCoa.appendChild(o);
+                    });
+                    const box = document.getElementById('lumpIds');
+                    box.innerHTML = '';
+                    sel.forEach(function (c) {
+                        const inp = document.createElement('input');
+                        inp.type = 'hidden'; inp.name = 'line_ids[]'; inp.value = c.dataset.line;
+                        box.appendChild(inp);
+                    });
+                    lumpModal.show();
+                });
+            }
         });
     </script>
 @endsection
