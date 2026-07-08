@@ -41,14 +41,19 @@
                             @error('fail')<div class="text-danger small">{{ $message }}</div>@enderror
                         </div>
 
-                        {{-- Notis & persetujuan PDPA (WAJIB) --}}
-                        <div class="alert alert-warning py-2 small mb-2">
-                            <i class="bi bi-shield-lock me-1"></i><strong>{{ __('Notis Data Peribadi (PDPA 2010)') }}</strong><br>
-                            {{ __('Penyata bank mengandungi maklumat peribadi & kewangan yang sensitif. Dengan memuat naik, anda mengesahkan anda DIBENARKAN berkongsi dokumen ini dan bersetuju ia diproses oleh AI semata-mata untuk tujuan rekod kewangan masjid.') }}
+                        {{-- Notis & persetujuan PDPA (WAJIB sebelum muat naik) --}}
+                        <div class="border border-warning rounded bg-warning-subtle p-2 mb-2 small">
+                            <div class="fw-bold mb-1"><i class="bi bi-shield-lock me-1"></i>{{ __('Notis Perlindungan Data Peribadi (PDPA 2010)') }}</div>
+                            <p class="mb-1">{{ __('Penyata bank mengandungi maklumat peribadi & kewangan yang sensitif — termasuk nama penderma dan pembayar. Sebelum memuat naik, sila pastikan:') }}</p>
+                            <ul class="mb-0 ps-3">
+                                <li>{{ __('Anda pegawai masjid yang DIBENARKAN mengendalikan penyata ini.') }}</li>
+                                <li>{{ __('Maklumat digunakan SEMATA-MATA untuk rekod kewangan masjid (padanan penyata & resit).') }}</li>
+                                <li>{{ __('Fail diproses oleh sistem dan disimpan dengan selamat; anda boleh memadamnya pada bila-bila masa.') }}</li>
+                            </ul>
                         </div>
                         <div class="form-check small mb-3">
                             <input type="checkbox" class="form-check-input" id="pdpa_setuju" name="pdpa_setuju" value="1" required @disabled(!$kuotaOk)>
-                            <label class="form-check-label" for="pdpa_setuju">{{ __('Saya faham & bersetuju untuk berkongsi penyata bank ini.') }}</label>
+                            <label class="form-check-label" for="pdpa_setuju">{{ __('Saya faham & mengesahkan perkara di atas, serta bersetuju memuat naik penyata bank ini.') }}</label>
                             @error('pdpa_setuju')<div class="text-danger">{{ $message }}</div>@enderror
                         </div>
 
