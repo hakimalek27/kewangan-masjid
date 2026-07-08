@@ -49,8 +49,23 @@ class SemakPenyataAdminController extends Controller
                 'id' => $p->id, 'nama' => $p->nama, 'model' => $p->model,
                 'base_url' => $p->base_url, 'is_active' => $p->is_active, 'is_default' => $p->is_default,
                 'catatan' => $p->catatan,
+                'kos_input_1k' => $p->kos_input_1k, 'kos_output_1k' => $p->kos_output_1k,
                 'keyMasked' => $p->api_key_ref ? $this->vault->masked($p->api_key_ref) : null,
             ]);
+
+        // Pantauan kos per-tenant (bulan semasa) — token & USD dibelanjakan.
+        $sejakBulan = now()->startOfMonth();
+        $kosTenant = PenyataSemakan::withoutMasjidScope()
+            ->where('created_at', '>=', $sejakBulan)
+            ->selectRaw('masjid_id, COUNT(*) bil, COALESCE(SUM(tokens_used),0) tokens, '
+                .'COALESCE(SUM(prompt_tokens),0) prompt, COALESCE(SUM(completion_tokens),0) completion, '
+                .'COALESCE(SUM(cost_usd),0) kos')
+            ->groupBy('masjid_id')->orderByDesc('kos')->get();
+        $kosTotal = (object) [
+            'bil' => (int) $kosTenant->sum('bil'),
+            'tokens' => (int) $kosTenant->sum('tokens'),
+            'kos' => (float) $kosTenant->sum('kos'),
+        ];
 
         return view('admin.semak-penyata', [
             'aktif' => $this->kuota->globallyEnabled(),
@@ -58,9 +73,16 @@ class SemakPenyataAdminController extends Controller
             'model' => Setting::get('sp_ai_model', 'gpt-4o', self::G),
             'baseUrl' => Setting::get('sp_ai_base_url', null, self::G),
             'kosPer1k' => Setting::get('sp_kos_per_1k_usd', null, self::G),
+            'hadUsd' => Setting::get('sp_had_usd_permintaan', (string) config('spkm.penyata_had_usd_lalai'), self::G),
+            'ocrSelari' => Setting::isOn('sp_ocr_selari', self::G),
+            'ocrSelariBil' => (int) config('spkm.ocr_selari_bil', 5),
             'providers' => $providers,
             'aiKatalog' => config('spkm.ai_provider_catalog', []),
+            'aiHarga' => config('spkm.ai_harga_model', []),
             'tenants' => $tenants,
+            'kosTenant' => $kosTenant,
+            'kosTotal' => $kosTotal,
+            'sejakBulan' => $sejakBulan,
             'log' => PenyataSemakan::withoutMasjidScope()
                 ->orderByDesc('id')
                 ->paginate(30),
@@ -122,6 +144,8 @@ class SemakPenyataAdminController extends Controller
             'base_url' => ['nullable', 'url:http,https', 'max:200'],
             'api_key' => ['nullable', 'string', 'max:200'],
             'catatan' => ['nullable', 'string', 'max:200'],
+            'kos_input_1k' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'kos_output_1k' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ], [], ['nama' => 'Nama Provider', 'model' => 'Model', 'base_url' => 'Base URL']);
 
         $provider = !empty($data['id']) ? SpProvider::findOrFail($data['id']) : new SpProvider();
@@ -140,6 +164,8 @@ class SemakPenyataAdminController extends Controller
             'is_active' => $request->boolean('is_active'),
             'is_default' => $request->boolean('is_default'),
             'catatan' => $data['catatan'] ?? null,
+            'kos_input_1k' => $data['kos_input_1k'] ?? null,
+            'kos_output_1k' => $data['kos_output_1k'] ?? null,
         ]);
         $provider->save();
 
@@ -169,6 +195,30 @@ class SemakPenyataAdminController extends Controller
 
         return redirect()->route('admin.semakpenyata')
             ->with('success', "Profil provider '{$nama}' dipadam.");
+    }
+
+    /**
+     * Kawalan kos & prestasi (global): had kos USD setiap permintaan scan
+     * (pemutus keselamatan token) + toggle OCR IMBASAN SELARI (laju tapi guna
+     * kadar/kos AI serentak lebih tinggi).
+     */
+    public function simpanKawalan(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'had_usd' => ['required', 'numeric', 'min:0', 'max:100'],
+        ], [], ['had_usd' => 'Had Kos USD']);
+
+        Setting::set('sp_had_usd_permintaan', (string) $data['had_usd'], self::G);
+        Setting::set('sp_ocr_selari', $request->boolean('ocr_selari') ? 'on' : 'off', self::G);
+
+        $this->audit->log('UPDATE', 'app_setting', null, [
+            'skey' => 'sp_had_usd_permintaan/sp_ocr_selari',
+            'had_usd' => $data['had_usd'], 'ocr_selari' => $request->boolean('ocr_selari'),
+        ]);
+
+        return redirect()->route('admin.semakpenyata')
+            ->with('success', 'Kawalan kos & prestasi disimpan (had USD '.$data['had_usd'].', OCR selari '
+                .($request->boolean('ocr_selari') ? 'HIDUP' : 'MATI').').');
     }
 
     /** Ubah had kuota bulanan satu tenant (0 = matikan ciri untuk tenant itu). */

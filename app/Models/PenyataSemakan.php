@@ -23,6 +23,14 @@ class PenyataSemakan extends Model
         'cost_usd' => 'decimal:4',
         'bil_baris' => 'integer',
         'bil_auto_padan' => 'integer',
+        'muka_jumlah' => 'integer',
+        'muka_siap' => 'integer',
+        'prompt_tokens' => 'integer',
+        'completion_tokens' => 'integer',
+        'penyata_jum_debit' => 'decimal:2',
+        'penyata_jum_kredit' => 'decimal:2',
+        'batal_diminta' => 'boolean',
+        'pdpa_setuju_pada' => 'datetime',
     ];
 
     public function baris(): HasMany

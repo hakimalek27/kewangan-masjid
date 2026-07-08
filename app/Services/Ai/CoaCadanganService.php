@@ -37,6 +37,73 @@ class CoaCadanganService
     }
 
     /**
+     * Cadangan COA PINTAR berasaskan KATA KUNCI dalam deskripsi (derma/sedekah/
+     * infaq/jumaat/ramadan/wakaf/khairat/zakat, dll). Utamakan mapping tempatan
+     * tenant (label ada kata kunci), kemudian nama COA keluarga betul. Digunakan
+     * untuk baris parse deterministik (tiada cadangan AI) & sebagai lapisan tengah.
+     */
+    public function cadangDariDeskripsi(int $masjidId, ?string $deskripsi, bool $masuk): ?int
+    {
+        $teks = mb_strtolower(trim((string) $deskripsi));
+        if ($teks === '') {
+            return null;
+        }
+
+        // kunci kanonik → sinonim yang dicari dalam deskripsi.
+        $peta = $masuk ? [
+            'jumaat' => ['jumaat', "juma'at", 'jumat'],
+            'ramadan' => ['ramadan', 'ramadhan', 'tarawih', 'terawih', 'moreh', 'iftar'],
+            'wakaf' => ['wakaf', 'waqaf'],
+            'khairat' => ['khairat', 'kematian', 'jenazah'],
+            'zakat' => ['zakat', 'fitrah'],
+            'kariah' => ['kariah', 'ahli kariah'],
+            'infaq' => ['infaq', 'infak', 'derma', 'sedekah', 'sumbangan', 'donation', 'duitnow', 'qr'],
+        ] : [
+            'elektrik' => ['elektrik', 'tnb'],
+            'air' => ['air ', 'syabas', 'lap '],
+            'gaji' => ['gaji', 'elaun', 'imam', 'bilal', 'siak', 'khadam'],
+        ];
+
+        $julat = $masuk ? ['400-%', '450-%'] : ['600-%', '650-%'];
+
+        foreach ($peta as $kunci => $sinonim) {
+            $jumpa = false;
+            foreach ($sinonim as $s) {
+                if (str_contains($teks, $s)) {
+                    $jumpa = true;
+                    break;
+                }
+            }
+            if (!$jumpa) {
+                continue;
+            }
+
+            // 1) mapping tempatan tenant yang labelnya mengandungi kata kunci.
+            $coa = CoaLocalMapping::withoutMasjidScope()
+                ->where('masjid_id', $masjidId)
+                ->where('local_label', 'like', '%'.$kunci.'%')
+                ->value('coa_id');
+            if ($coa) {
+                return (int) $coa;
+            }
+
+            // 2) COA keluarga betul yang namanya mengandungi kata kunci.
+            $coa = Coa::withoutMasjidScope()
+                ->where('masjid_id', $masjidId)
+                ->where('is_header', 0)->where('is_active', 1)
+                ->where(fn ($q) => $q->where('kod', 'like', $julat[0])->orWhere('kod', 'like', $julat[1]))
+                ->where('nama', 'like', '%'.$kunci.'%')
+                ->orderBy('kod')
+                ->value('id');
+            if ($coa) {
+                return (int) $coa;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Fallback wang MASUK tanpa deskripsi bermakna: infaq/sedekah.
      * Rantai: mapping label infaq/sedekah → COA 400-% nama infaq/sedekah/sumbangan
      * → COA hasil postable pertama (400-%).

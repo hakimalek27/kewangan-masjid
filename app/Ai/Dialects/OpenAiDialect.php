@@ -8,6 +8,7 @@ use App\Ai\Contracts\VisionExtractorInterface;
 use App\Ai\DTO\ExtractionResult;
 use App\Ai\DTO\StatementResult;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
@@ -49,6 +50,55 @@ class OpenAiDialect implements StatementExtractorInterface, VisionExtractorInter
 
         $hasil = StatementResult::fromJson((string) $response->json('choices.0.message.content', ''));
         $hasil->tokensUsed = $response->json('usage.total_tokens');
+        $hasil->promptTokens = $response->json('usage.prompt_tokens');
+        $hasil->completionTokens = $response->json('usage.completion_tokens');
+
+        return $hasil;
+    }
+
+    /**
+     * OCR SELARI — hantar banyak imej serentak (Http::pool). Setiap item gagal →
+     * null (pemanggil report + langkau); tiada AiException dilempar untuk satu
+     * kegagalan supaya muka lain kekal diproses.
+     *
+     * @param  string[]  $itemsBytes
+     * @return array<int, StatementResult|null>
+     */
+    public function extractStatementBatch(array $itemsBytes, string $mime, string $prompt): array
+    {
+        $url = rtrim($this->baseUrl ?: 'https://api.openai.com', '/').'/v1/chat/completions';
+        $items = array_values($itemsBytes);
+
+        $responses = Http::pool(fn (Pool $pool) => array_map(
+            fn ($bytes) => $pool->withToken($this->apiKey)->timeout(120)->post($url, [
+                'model' => $this->model,
+                'max_tokens' => 16384,
+                'response_format' => ['type' => 'json_object'],
+                'messages' => [[
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'text', 'text' => $prompt],
+                        $this->blokKandungan($bytes, $mime),
+                    ],
+                ]],
+            ]),
+            $items
+        ));
+
+        $hasil = [];
+        foreach ($items as $i => $_) {
+            $resp = $responses[$i] ?? null;
+            if (!$resp instanceof Response || $resp->failed()) {
+                $hasil[$i] = null; // ConnectionException / HTTP gagal → langkau
+
+                continue;
+            }
+            $r = StatementResult::fromJson((string) $resp->json('choices.0.message.content', ''));
+            $r->tokensUsed = $resp->json('usage.total_tokens');
+            $r->promptTokens = $resp->json('usage.prompt_tokens');
+            $r->completionTokens = $resp->json('usage.completion_tokens');
+            $hasil[$i] = $r;
+        }
 
         return $hasil;
     }
@@ -89,7 +139,8 @@ class OpenAiDialect implements StatementExtractorInterface, VisionExtractorInter
 
     /**
      * PDF perlu blok `file` (image_url TIDAK menerima PDF di OpenAI);
-     * imej kekal blok image_url data-URI (payload sama seperti sebelum ini).
+     * teks (PDF digital diekstrak) dihantar sebagai blok text biasa — jauh lebih
+     * murah/pantas & tiada ralat OCR; imej kekal blok image_url data-URI.
      */
     private function blokKandungan(string $bytes, string $mime): array
     {
@@ -98,6 +149,10 @@ class OpenAiDialect implements StatementExtractorInterface, VisionExtractorInter
                 'filename' => 'dokumen.pdf',
                 'file_data' => 'data:application/pdf;base64,'.base64_encode($bytes),
             ]];
+        }
+
+        if (str_starts_with($mime, 'text/')) {
+            return ['type' => 'text', 'text' => "PENYATA (teks diekstrak dari PDF):\n".$bytes];
         }
 
         return ['type' => 'image_url', 'image_url' => [

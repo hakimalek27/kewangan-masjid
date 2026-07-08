@@ -18,6 +18,8 @@ class SpProvider extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_default' => 'boolean',
+        'kos_input_1k' => 'decimal:6',
+        'kos_output_1k' => 'decimal:6',
     ];
 
     /** Provider aktif untuk dropdown pilihan (default dahulu). */

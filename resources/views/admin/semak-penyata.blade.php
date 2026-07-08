@@ -43,6 +43,7 @@
                                     <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-prov"
                                             data-id="{{ $p->id }}" data-nama="{{ $p->nama }}" data-model="{{ $p->model }}"
                                             data-base="{{ $p->base_url }}" data-catatan="{{ $p->catatan }}"
+                                            data-kosin="{{ $p->kos_input_1k }}" data-kosout="{{ $p->kos_output_1k }}"
                                             data-active="{{ $p->is_active ? 1 : 0 }}" data-default="{{ $p->is_default ? 1 : 0 }}">
                                         <i class="bi bi-pencil"></i>
                                     </button>
@@ -102,6 +103,15 @@
                 <div class="col-md-4">
                     <input type="text" name="catatan" id="prov_catatan" maxlength="200" class="form-control form-control-sm" placeholder="{{ __('Catatan (pilihan)') }}">
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0" for="prov_kos_input">{{ __('Kos USD / 1k — Input') }}</label>
+                    <input type="number" step="0.000001" min="0" max="100" name="kos_input_1k" id="prov_kos_input" class="form-control form-control-sm" placeholder="0.0025">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0" for="prov_kos_output">{{ __('Kos USD / 1k — Output') }}</label>
+                    <input type="number" step="0.000001" min="0" max="100" name="kos_output_1k" id="prov_kos_output" class="form-control form-control-sm" placeholder="0.01">
+                    <div class="form-text small">{{ __('Untuk kira kos TEPAT. Rujuk harga rasmi provider (biasa disebut per 1M token — bahagi 1000).') }}</div>
+                </div>
                 <div class="col-12 text-end">
                     <button type="button" id="prov_reset" class="btn btn-sm btn-outline-secondary">{{ __('Kosongkan') }}</button>
                     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>{{ __('Simpan Profil') }}</button>
@@ -110,6 +120,54 @@
             <p class="form-text small mb-0 mt-2">
                 <i class="bi bi-info-circle me-1"></i>{{ __('Pilih Provider → URL & senarai model auto-isi. Model mesti sokong VISION untuk OCR. PDF hanya OpenAI sokong penuh — provider lain guna IMEJ (JPG/PNG).') }}
             </p>
+        </div>
+    </div>
+
+    {{-- Pantauan kos per-tenant (bulan semasa) — token TEPAT (usage) + USD dikira --}}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header fw-bold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="bi bi-cash-coin me-1"></i>{{ __('Pantauan Kos Per-Tenant') }}
+                <span class="text-muted small">({{ __('bulan ini, sejak') }} {{ $sejakBulan->format('d M Y') }})</span></span>
+            <span class="small">{{ __('Jumlah') }}: <strong>{{ number_format($kosTotal->tokens) }}</strong> {{ __('token') }} ·
+                <strong>USD {{ number_format($kosTotal->kos, 4) }}</strong></span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>{{ __('Masjid') }}</th>
+                    <th class="text-center">{{ __('Permintaan') }}</th>
+                    <th class="text-end">{{ __('Token Input') }}</th>
+                    <th class="text-end">{{ __('Token Output') }}</th>
+                    <th class="text-end">{{ __('Jumlah Token') }}</th>
+                    <th class="text-end">{{ __('Kos (USD)') }}</th>
+                </tr></thead>
+                <tbody>
+                    @forelse ($kosTenant as $k)
+                        <tr>
+                            <td><small>{{ $namaMasjid[$k->masjid_id] ?? $k->masjid_id }}</small></td>
+                            <td class="text-center">{{ $k->bil }}</td>
+                            <td class="text-end">{{ number_format($k->prompt) }}</td>
+                            <td class="text-end">{{ number_format($k->completion) }}</td>
+                            <td class="text-end">{{ number_format($k->tokens) }}</td>
+                            <td class="text-end fw-semibold">{{ number_format((float) $k->kos, 4) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="text-center text-muted py-3">{{ __('Tiada penggunaan bulan ini.') }}</td></tr>
+                    @endforelse
+                </tbody>
+                @if ($kosTenant->isNotEmpty())
+                    <tfoot class="table-light fw-bold"><tr>
+                        <td>{{ __('JUMLAH') }}</td>
+                        <td class="text-center">{{ $kosTotal->bil }}</td>
+                        <td colspan="2"></td>
+                        <td class="text-end">{{ number_format($kosTotal->tokens) }}</td>
+                        <td class="text-end">{{ number_format($kosTotal->kos, 4) }}</td>
+                    </tr></tfoot>
+                @endif
+            </table>
+        </div>
+        <div class="card-footer small text-muted">
+            <i class="bi bi-info-circle me-1"></i>{{ __('Token diambil terus dari respons AI (usage) — TEPAT. Kos USD dikira dari kadar input/output setiap provider (isi di borang provider di atas); provider tanpa kadar guna kadar pukul-rata global.') }}
         </div>
     </div>
 
@@ -171,6 +229,30 @@
                                    class="form-control form-control-sm" value="{{ old('kos_per_1k', $kosPer1k) }}" placeholder="0.005">
                         </div>
                         <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>{{ __('Simpan') }}</button>
+                    </form>
+                </div>
+            </div>
+
+            {{-- Kawalan kos & prestasi --}}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header fw-bold"><i class="bi bi-speedometer2 me-1"></i>{{ __('Kawalan Kos & Prestasi') }}</div>
+                <div class="card-body">
+                    <form method="POST" action="{{ route('admin.semakpenyata.kawalan') }}">
+                        @csrf
+                        <div class="mb-3">
+                            <label class="form-label small" for="had_usd">{{ __('Had kos USD setiap permintaan scan') }}</label>
+                            <input type="number" step="0.01" min="0" max="100" name="had_usd" id="had_usd" required
+                                   class="form-control form-control-sm" value="{{ old('had_usd', $hadUsd) }}" placeholder="2.00">
+                            <div class="form-text small">{{ __('Pemutus keselamatan token — AI berhenti bila kos anggaran mencecah had ini (0 = tiada had). Perlu "Kos USD per 1000 token" di atas diisi supaya had berfungsi.') }}</div>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input type="checkbox" class="form-check-input" role="switch" name="ocr_selari" id="ocr_selari" value="1" @checked($ocrSelari)>
+                            <label class="form-check-label small" for="ocr_selari">
+                                {{ __('OCR Imbasan Selari') }} <span class="text-muted">({{ __('proses lebih kurang :n muka serentak', ['n' => $ocrSelariBil]) }})</span>
+                            </label>
+                            <div class="form-text small">{{ __('Potong masa penyata IMBASAN berbilang muka (cth 10 min → 2-3 min), tetapi guna kadar/kos AI serentak lebih tinggi. Penyata DIGITAL tidak terjejas.') }}</div>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>{{ __('Simpan Kawalan') }}</button>
                     </form>
                 </div>
             </div>
@@ -238,9 +320,9 @@
                             <tr>
                                 <th>#</th>
                                 <th>{{ __('Masjid') }}</th>
+                                <th>{{ __('Provider') }}</th>
                                 <th>{{ __('Status') }}</th>
                                 <th class="text-center">{{ __('Baris') }}</th>
-                                <th class="text-center">{{ __('Auto padan') }}</th>
                                 <th class="text-end">{{ __('Token') }}</th>
                                 <th class="text-end">{{ __('Kos (USD)') }}</th>
                                 <th>{{ __('Tarikh') }}</th>
@@ -252,13 +334,13 @@
                                 <tr>
                                     <td>{{ $l->id }}</td>
                                     <td><small>{{ $namaMasjid[$l->masjid_id] ?? $l->masjid_id }}</small></td>
+                                    <td><small class="text-muted">{{ $l->provider ?? '—' }}</small>@if ($l->model)<br><code class="small">{{ $l->model }}</code>@endif</td>
                                     <td>
-                                        @php $warna = ['SEDIA'=>'success','GAGAL'=>'danger','AI_PROCESSING'=>'info','UPLOADED'=>'secondary'][$l->status] ?? 'secondary'; @endphp
+                                        @php $warna = ['SEDIA'=>'success','GAGAL'=>'danger','AI_PROCESSING'=>'info','UPLOADED'=>'secondary','DIBATAL'=>'dark','DIPADAM'=>'secondary'][$l->status] ?? 'secondary'; @endphp
                                         <span class="badge bg-{{ $warna }}">{{ $l->status }}</span>
                                     </td>
                                     <td class="text-center">{{ $l->bil_baris }}</td>
-                                    <td class="text-center">{{ $l->bil_auto_padan }}</td>
-                                    <td class="text-end">{{ $l->tokens_used ? number_format($l->tokens_used) : '—' }}</td>
+                                    <td class="text-end" title="{{ __('Input') }}: {{ number_format((int) $l->prompt_tokens) }} · {{ __('Output') }}: {{ number_format((int) $l->completion_tokens) }}">{{ $l->tokens_used ? number_format($l->tokens_used) : '—' }}</td>
                                     <td class="text-end">{{ $l->cost_usd !== null ? number_format((float) $l->cost_usd, 4) : '—' }}</td>
                                     <td><small>{{ $l->created_at?->format('Y-m-d H:i') }}</small></td>
                                     <td class="text-end">
@@ -289,7 +371,17 @@
     <script>
         (function () {
             var CATALOG = @json($aiKatalog);
+            var HARGA = @json((object) $aiHarga); // model → [input/1k, output/1k]
             var $ = function (id) { return document.getElementById(id); };
+
+            // Auto-isi kadar harga rasmi bila model dikenali. force=true (pilih model)
+            // menulis ganti; force=false (taip) hanya isi jika kosong.
+            function autoHarga(force) {
+                var h = HARGA[modelText.value];
+                if (!h) return;
+                if (force || !$('prov_kos_input').value) $('prov_kos_input').value = h[0];
+                if (force || !$('prov_kos_output').value) $('prov_kos_output').value = h[1];
+            }
             var preset = $('prov_preset'), modelPilih = $('prov_model_pilih'),
                 modelText = $('prov_model'), baseUrl = $('prov_base'), pdfWarn = $('prov_pdf_warn');
             var CUSTOM = '__custom__';
@@ -323,11 +415,12 @@
             }
 
             if (preset) {
-                preset.addEventListener('change', function () { isiPreset(preset.value, false); });
+                preset.addEventListener('change', function () { isiPreset(preset.value, false); autoHarga(false); });
                 modelPilih.addEventListener('change', function () {
                     if (modelPilih.value === CUSTOM) { modelText.value = ''; modelText.focus(); }
-                    else { modelText.value = modelPilih.value; }
+                    else { modelText.value = modelPilih.value; autoHarga(true); }
                 });
+                modelText.addEventListener('input', function () { autoHarga(false); });
                 isiPreset(preset.value, false); // muatan awal
             }
 
@@ -339,6 +432,8 @@
                     modelText.value = d.model || '';
                     baseUrl.value = d.base || '';
                     $('prov_catatan').value = d.catatan || '';
+                    $('prov_kos_input').value = d.kosin || '';
+                    $('prov_kos_output').value = d.kosout || '';
                     $('prov_api_key').value = '';
                     $('prov_active').checked = d.active === '1';
                     $('prov_default').checked = d.default === '1';
@@ -354,7 +449,7 @@
             var reset = $('prov_reset');
             if (reset) {
                 reset.addEventListener('click', function () {
-                    ['prov_id', 'prov_nama', 'prov_catatan', 'prov_api_key'].forEach(function (id) { $(id).value = ''; });
+                    ['prov_id', 'prov_nama', 'prov_catatan', 'prov_api_key', 'prov_kos_input', 'prov_kos_output'].forEach(function (id) { $(id).value = ''; });
                     $('prov_active').checked = true;
                     $('prov_default').checked = false;
                     preset.value = 'openai';

@@ -35,6 +35,11 @@ class ProsesPenyataAi implements ShouldQueue
     // satu) → penyata 70+ muka boleh ambil beberapa minit. Had luas untuk pipeline.
     public int $timeout = 1800;
 
+    // Pecahan token terkumpul (input/output) merentas semua panggilan AI batch ini —
+    // untuk kira kos TEPAT ikut kadar berasingan (bukan pukul rata).
+    private int $promptTokens = 0;
+    private int $completionTokens = 0;
+
     public function __construct(public int $batchId)
     {
         $this->onQueue('ai');
@@ -89,8 +94,23 @@ class ProsesPenyataAi implements ShouldQueue
             // Rekod provider sebenar yang digunakan (label untuk paparan/banding).
             $batch->update(['provider_label' => ($config['provider'] ?? 'OPENAI').' ('.($config['model'] ?? '').')']);
 
-            $prompt = $factory->buildPromptPenyata($masjidId);
-            [$lines, $totalTokens] = $this->ekstrakBaris($batch, $extractor, $pdf, $prompt);
+            [$lines, $totalTokens, $keadaan] = $this->ekstrakBaris($batch, $extractor, $pdf, $factory, $masjidId);
+
+            // Dibatalkan pengguna semasa proses → BUANG hasil separa, tanda DIBATAL.
+            if ($keadaan === 'DIBATAL') {
+                $batch->update([
+                    'status' => 'DIBATAL', 'batal_diminta' => false,
+                    'tokens_used' => $totalTokens ?: null,
+                    'prompt_tokens' => $this->promptTokens ?: null,
+                    'completion_tokens' => $this->completionTokens ?: null,
+                    'error_text' => 'Dibatalkan oleh pengguna semasa pemprosesan AI.',
+                ]);
+                $audit->log('UPDATE', 'penyata_semakan', null, [
+                    'batch' => $batch->id, 'nota' => 'dibatalkan pengguna', 'tokens' => $totalTokens,
+                ], $batch->id, masjidId: $masjidId);
+
+                return;
+            }
 
             if (empty($lines)) {
                 throw new AiException('AI tidak menemui sebarang baris transaksi dalam penyata ini.');
@@ -140,6 +160,7 @@ class ProsesPenyataAi implements ShouldQueue
                     $jenis = $masuk ? 'KUTIPAN' : 'BAYARAN';
 
                     $coaId = $cadangan->petakan($masjidId, $ln->cadanganCoa)
+                        ?? $cadangan->cadangDariDeskripsi($masjidId, $deskripsi, $masuk)
                         ?? ($masuk
                             ? $cadangan->fallbackKutipan($masjidId)
                             : $cadangan->fallbackBayaran($masjidId));
@@ -164,17 +185,35 @@ class ProsesPenyataAi implements ShouldQueue
             // Padanan auto lawan lejar (masjid_id EKSPLISIT — job tiada konteks request).
             $dipadan = $bilBaris > 0 ? $recon->padanAuto((int) $batch->bank_account_id, $masjidId) : 0;
 
+            // Had kos dicapai → hasil DISIMPAN tetapi separa; amaran (bukan ralat).
+            $amaran = $keadaan === 'HAD_KOS'
+                ? 'Had kos AI dicapai — hanya '.((int) $batch->muka_siap).'/'.((int) $batch->muka_jumlah)
+                    .' muka diproses. Sebahagian transaksi mungkin belum discan; naikkan had kos di Tetapan AI atau pisahkan fail.'
+                : null;
+
+            // Kos TEPAT: kadar input/output provider × token sebenar (usage). Jika
+            // provider tiada kadar → pukul rata sp_kos_per_1k_usd × jumlah token.
             $kosPer1k = (float) Setting::get('sp_kos_per_1k_usd', '0', KuotaPenyataService::MASJID_GLOBAL);
+            $kosInput = $config['kos_input_1k'] ?? null;
+            $kosOutput = $config['kos_output_1k'] ?? null;
+            // 1) Kadar input/output provider (TEPAT) → 2) kadar global pukul-rata →
+            // 3) fallback config (anggaran) supaya kos TIDAK pernah null bila ada token.
+            $blended = $kosPer1k > 0 ? $kosPer1k : (float) config('spkm.penyata_kos_blended_lalai', 0.006);
+            $cost = ($kosInput !== null && $kosOutput !== null)
+                ? round($this->promptTokens / 1000 * (float) $kosInput + $this->completionTokens / 1000 * (float) $kosOutput, 4)
+                : ($totalTokens > 0 ? round($totalTokens / 1000 * $blended, 4) : null);
+
             $batch->update([
                 'status' => 'SEDIA',
                 'provider' => $config['provider'],
                 'model' => $config['model'],
                 'tokens_used' => $totalTokens,
-                'cost_usd' => $totalTokens && $kosPer1k > 0
-                    ? round($totalTokens / 1000 * $kosPer1k, 4) : null,
+                'prompt_tokens' => $this->promptTokens ?: null,
+                'completion_tokens' => $this->completionTokens ?: null,
+                'cost_usd' => $cost,
                 'bil_baris' => $bilBaris,
                 'bil_auto_padan' => $dipadan,
-                'error_text' => null,
+                'error_text' => $amaran,
             ]);
 
             $audit->log('UPDATE', 'penyata_semakan', null, [
@@ -200,52 +239,195 @@ class ProsesPenyataAi implements ShouldQueue
     }
 
     /**
-     * Ekstrak baris + jumlah token. PDF IMBASAN berbilang-muka → pecah kepada imej
-     * setiap muka (Poppler) dan OCR SATU MUKA satu panggilan supaya SEMUA transaksi
-     * dibaca (model vision hanya baca muka pertama bila PDF penuh dihantar terus).
-     * Imej tunggal / PDF tanpa Poppler → satu panggilan (fallback).
+     * Ekstrak baris + jumlah token. Pilih kaedah terbaik ikut jenis fail:
+     *  - Imej tunggal / PDF tanpa Poppler   → satu panggilan (fallback).
+     *  - PDF DIGITAL (teks terbenam)        → baca TEKS terus, gabung beberapa muka
+     *    satu panggilan. Pantas (saat) + tepat (tiada ralat OCR).
+     *  - PDF IMBASAN (image-only)           → render setiap muka ke imej, OCR
+     *    satu-satu (model vision hanya baca muka pertama jika PDF penuh dihantar).
      *
-     * @return array{0: array, 1: int}  [$lines, $totalTokens]
+     * @return array{0: array, 1: int, 2: string}  [$lines, $totalTokens, $keadaan]
+     *   $keadaan: 'OK' | 'DIBATAL' (dibatalkan pengguna) | 'HAD_KOS' (had kos dicapai)
      */
-    private function ekstrakBaris(PenyataSemakan $batch, $extractor, PdfRenderService $pdf, string $prompt): array
+    private function ekstrakBaris(PenyataSemakan $batch, $extractor, PdfRenderService $pdf, $factory, int $masjidId): array
     {
         // Imej tunggal, ATAU PDF tetapi Poppler tiada → satu panggilan.
         if ($batch->mime !== 'application/pdf' || !$pdf->tersedia()) {
+            if ($this->dibatalkan($batch->id)) {
+                return [[], 0, 'DIBATAL'];
+            }
             $bytes = Storage::disk('local')->get($batch->file_path);
             if ($bytes === null) {
                 throw new AiException('Fail penyata tidak ditemui: '.$batch->file_path);
             }
-            $r = $extractor->extractStatement($bytes, $batch->mime, $prompt);
+            $batch->update([
+                'kaedah' => $batch->mime === 'application/pdf' ? 'PDF' : 'IMEJ',
+                'muka_jumlah' => 1, 'muka_siap' => 0,
+            ]);
+            $r = $extractor->extractStatement($bytes, $batch->mime, $factory->buildPromptPenyata($masjidId));
+            $total = $this->kiraToken($r);
+            $batch->update(['muka_siap' => 1]);
 
-            return [$r->lines, (int) $r->tokensUsed];
+            return [$r->lines, $total, 'OK'];
         }
 
-        // PDF imbasan → render setiap muka ke imej, OCR satu-satu, gabung.
         $absPdf = Storage::disk('local')->path($batch->file_path);
-        $tmpDir = storage_path('app/penyata-ai-tmp'.DIRECTORY_SEPARATOR.$batch->id);
+
+        // PDF DIGITAL? Teks terbenam bermakna pada ≥60% muka → baca teks terus.
+        $teksMuka = $pdf->ekstrakTeks($absPdf);
+        $berteks = 0;
+        foreach ($teksMuka as $t) {
+            if (mb_strlen(trim($t)) >= 40) {
+                $berteks++;
+            }
+        }
+        $digital = !empty($teksMuka) && $berteks >= max(1, (int) ceil(count($teksMuka) * 0.6));
+
+        if ($digital) {
+            // PARSE DETERMINISTIK dahulu (format jadual dikenali) — PERCUMA, pantas,
+            // 100% konsisten & lengkap. AI (LLM) untuk transkrip jadual besar =
+            // mahal + tidak konsisten + tertinggal baris. AI hanya fallback.
+            $parse = app(\App\Services\Ai\PenyataDigitalParser::class)->cubaParse(implode("\n", $teksMuka));
+            if ($parse !== null) {
+                $batch->update([
+                    'kaedah' => 'PARSE',
+                    'muka_jumlah' => count($teksMuka), 'muka_siap' => count($teksMuka),
+                    'penyata_jum_debit' => $parse['grand_debit'],
+                    'penyata_jum_kredit' => $parse['grand_credit'],
+                ]);
+
+                return [$parse['lines'], 0, 'OK'];
+            }
+
+            // Format digital tak dikenali parser (cth bank tukar susun lajur) → guna AI.
+            // Log untuk admin supaya parser format ini boleh ditambah kemudian.
+            report(new \RuntimeException('Semak Penyata: PDF digital format tidak dikenali parser deterministik — beralih ke AI (batch #'.$batch->id.').'));
+
+            return $this->ekstrakDigital($batch, $extractor, $factory, $masjidId, $teksMuka);
+        }
+
+        return $this->ekstrakScan($batch, $extractor, $pdf, $factory, $masjidId, $absPdf);
+    }
+
+    /**
+     * PDF DIGITAL — teks per muka dibaca terus (pdftotext), digabung beberapa muka
+     * satu panggilan AI. Kemas kini muka_siap untuk bar progres.
+     *
+     * @return array{0: array, 1: int, 2: string}
+     */
+    private function ekstrakDigital(PenyataSemakan $batch, $extractor, $factory, int $masjidId, array $teksMuka): array
+    {
+        $prompt = $factory->buildPromptPenyata($masjidId, teks: true);
+        $muka = array_values(array_filter(array_map('rtrim', $teksMuka), fn ($t) => trim($t) !== ''));
+        $batch->update(['kaedah' => 'DIGITAL', 'muka_jumlah' => count($muka), 'muka_siap' => 0]);
+
+        $per = max(1, (int) config('spkm.penyata_text_pages_per_call', 8));
+        $had = $this->hadKosUsd();
+        $kosPer1k = $this->kosPer1k();
         $lines = [];
         $totalTokens = 0;
+        $siap = 0;
+        $keadaan = 'OK';
+
+        foreach (array_chunk($muka, $per) as $kelompok) {
+            if ($this->dibatalkan($batch->id)) {
+                $keadaan = 'DIBATAL';
+                break;
+            }
+            $teks = '';
+            foreach ($kelompok as $t) {
+                $teks .= "\n----- MUKA -----\n".$t;
+            }
+            try {
+                $r = $extractor->extractStatement($teks, 'text/plain', $prompt);
+                $lines = array_merge($lines, $r->lines);
+                $totalTokens += $this->kiraToken($r);
+            } catch (\Throwable $e) {
+                report($e); // langkau kelompok gagal, teruskan
+            }
+            $siap += count($kelompok);
+            $batch->update(['muka_siap' => $siap]);
+            if ($this->melebihiHad($totalTokens, $kosPer1k, $had)) {
+                $keadaan = 'HAD_KOS';
+                break;
+            }
+        }
+
+        return [$lines, $totalTokens, $keadaan];
+    }
+
+    /**
+     * PDF IMBASAN — render setiap muka ke imej (Poppler), OCR satu-satu, gabung.
+     * Tahan-ralat per-muka: kegagalan satu muka TIDAK membuang muka lain.
+     *
+     * @return array{0: array, 1: int, 2: string}
+     */
+    private function ekstrakScan(PenyataSemakan $batch, $extractor, PdfRenderService $pdf, $factory, int $masjidId, string $absPdf): array
+    {
+        $prompt = $factory->buildPromptPenyata($masjidId);
+        $tmpDir = storage_path('app/penyata-ai-tmp'.DIRECTORY_SEPARATOR.$batch->id);
+        $had = $this->hadKosUsd();
+        $kosPer1k = $this->kosPer1k();
+        // OCR SELARI (superadmin toggle): proses beberapa muka serentak (Http::pool).
+        $selari = Setting::isOn('sp_ocr_selari', KuotaPenyataService::MASJID_GLOBAL);
+        $chunkSize = $selari ? max(1, (int) config('spkm.ocr_selari_bil', 5)) : 1;
+        $lines = [];
+        $totalTokens = 0;
+        $keadaan = 'OK';
 
         try {
             $imej = $pdf->renderKeImej($absPdf, $tmpDir);
             if (empty($imej)) {
                 throw new AiException('Tiada muka dapat dirender daripada PDF.');
             }
+            $batch->update(['kaedah' => 'SCAN', 'muka_jumlah' => count($imej), 'muka_siap' => 0]);
+            $siap = 0;
 
-            // Tahan-ralat per-muka: kegagalan satu muka (rate-limit/timeout) TIDAK
-            // membuang muka lain — log & teruskan. GAGAL muktamad hanya jika SEMUA
-            // muka gagal (baris kosong → dilempar oleh pemanggil).
-            foreach ($imej as $img) {
-                $b = @file_get_contents($img);
-                if ($b === false) {
-                    continue;
+            foreach (array_chunk($imej, $chunkSize) as $kelompok) {
+                if ($this->dibatalkan($batch->id)) {
+                    $keadaan = 'DIBATAL';
+                    break;
                 }
-                try {
-                    $r = $extractor->extractStatement($b, 'image/jpeg', $prompt);
-                    $lines = array_merge($lines, $r->lines);
-                    $totalTokens += (int) $r->tokensUsed;
-                } catch (\Throwable $e) {
-                    report($e); // log muka gagal, teruskan muka seterusnya
+
+                $bytesArr = [];
+                foreach ($kelompok as $img) {
+                    $b = @file_get_contents($img);
+                    if ($b !== false) {
+                        $bytesArr[] = $b;
+                    }
+                }
+
+                if ($selari && count($bytesArr) > 1 && method_exists($extractor, 'extractStatementBatch')) {
+                    // Kelompok serentak.
+                    try {
+                        foreach ($extractor->extractStatementBatch($bytesArr, 'image/jpeg', $prompt) as $r) {
+                            if ($r === null) {
+                                continue; // muka gagal — langkau
+                            }
+                            $lines = array_merge($lines, $r->lines);
+                            $totalTokens += $this->kiraToken($r);
+                        }
+                    } catch (\Throwable $e) {
+                        report($e);
+                    }
+                } else {
+                    // Berturutan.
+                    foreach ($bytesArr as $b) {
+                        try {
+                            $r = $extractor->extractStatement($b, 'image/jpeg', $prompt);
+                            $lines = array_merge($lines, $r->lines);
+                            $totalTokens += $this->kiraToken($r);
+                        } catch (\Throwable $e) {
+                            report($e); // log muka gagal, teruskan muka seterusnya
+                        }
+                    }
+                }
+
+                $siap += count($kelompok);
+                $batch->update(['muka_siap' => $siap]);
+                if ($this->melebihiHad($totalTokens, $kosPer1k, $had)) {
+                    $keadaan = 'HAD_KOS';
+                    break;
                 }
             }
         } finally {
@@ -256,7 +438,41 @@ class ProsesPenyataAi implements ShouldQueue
             @rmdir($tmpDir);
         }
 
-        return [$lines, $totalTokens];
+        return [$lines, $totalTokens, $keadaan];
+    }
+
+    /** Kumpul pecahan token satu respons; pulang jumlah token (untuk had kos). */
+    private function kiraToken($r): int
+    {
+        $this->promptTokens += (int) $r->promptTokens;
+        $this->completionTokens += (int) $r->completionTokens;
+
+        return (int) $r->tokensUsed;
+    }
+
+    /** Pengguna minta batal? (dibaca segar setiap kelompok — job berhenti awal). */
+    private function dibatalkan(int $batchId): bool
+    {
+        return (bool) PenyataSemakan::withoutMasjidScope()->whereKey($batchId)->value('batal_diminta');
+    }
+
+    /** Had kos USD setiap permintaan (0 = tiada had). */
+    private function hadKosUsd(): float
+    {
+        return (float) Setting::get('sp_had_usd_permintaan',
+            (string) config('spkm.penyata_had_usd_lalai'), KuotaPenyataService::MASJID_GLOBAL);
+    }
+
+    /** Kos USD setiap 1k token (untuk pemutus had + paparan kos). */
+    private function kosPer1k(): float
+    {
+        return (float) Setting::get('sp_kos_per_1k_usd', '0', KuotaPenyataService::MASJID_GLOBAL);
+    }
+
+    /** Anggaran kos setakat ini melebihi had? (perlu had>0 & harga token diketahui). */
+    private function melebihiHad(int $totalTokens, float $kosPer1k, float $had): bool
+    {
+        return $had > 0 && $kosPer1k > 0 && ($totalTokens / 1000 * $kosPer1k) >= $had;
     }
 
     /** Dipanggil Laravel HANYA selepas semua percubaan habis — GAGAL membebaskan kuota. */

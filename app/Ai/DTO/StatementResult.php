@@ -13,6 +13,8 @@ class StatementResult
     public array $lines = [];
     public string $rawJson = '';
     public ?int $tokensUsed = null;
+    public ?int $promptTokens = null;      // token input (prompt) — untuk kos tepat
+    public ?int $completionTokens = null;  // token output (jawapan)
 
     public static function fromJson(string $teks): self
     {

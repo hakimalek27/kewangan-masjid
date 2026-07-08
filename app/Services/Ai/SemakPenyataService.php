@@ -62,6 +62,24 @@ class SemakPenyataService
 
     private function muatNaikDalamKunci(int $bankAccountId, UploadedFile $fail, int $masjidId, int $providerId, ?string $providerLabel): PenyataSemakan
     {
+        // Sahkan bank milik masjid (scope global) — anti IDOR.
+        $bank = BankAccount::findOrFail($bankAccountId);
+
+        $hash = hash_file('sha256', $fail->getRealPath());
+        // Dedup PER-provider: penyata sama boleh discan sekali setiap provider (banding).
+        $wujud = PenyataSemakan::where('file_hash', $hash)->where('sp_provider_id', $providerId)->first();
+
+        // Batch tidak-aktif (GAGAL/DIBATAL/DIPADAM) TIDAK mengunci fail — GUNA SEMULA
+        // slot sedia ada (re-scan fail SAMA yang tenant sudah muat naik) tanpa memerlukan
+        // kuota BAHARU: reset ke UPLOADED, buang baris/fail lama, dispatch semula.
+        if ($wujud && in_array($wujud->status, ['GAGAL', 'DIBATAL', 'DIPADAM'], true)) {
+            return $this->cubaSemula($wujud, $fail, $masjidId);
+        }
+        if ($wujud) {
+            throw new InvalidArgumentException('Penyata ini telah dimuat naik dengan provider yang sama sebelum ini (batch #'.$wujud->id.'). Padam batch itu dahulu untuk scan semula, atau pilih provider lain untuk banding.');
+        }
+
+        // Muat naik BAHARU (fail belum pernah discan provider ini) → semak kuota.
         if (!$this->kuota->boleh($masjidId)) {
             $baki = $this->kuota->remaining($masjidId);
             $had = $this->kuota->effectiveLimit($masjidId);
@@ -70,22 +88,6 @@ class SemakPenyataService
                     ? "Kuota bulanan Semak Penyata telah habis (baki {$baki}/{$had}). Sila hubungi pentadbir sistem untuk top-up."
                     : 'Ciri Semak Penyata (AI) tidak aktif buat masa ini.'
             );
-        }
-
-        // Sahkan bank milik masjid (scope global) — anti IDOR.
-        $bank = BankAccount::findOrFail($bankAccountId);
-
-        $hash = hash_file('sha256', $fail->getRealPath());
-        // Dedup PER-provider: penyata sama boleh discan sekali setiap provider (banding).
-        $wujud = PenyataSemakan::where('file_hash', $hash)->where('sp_provider_id', $providerId)->first();
-
-        // Batch GAGAL tidak mengunci fail — guna semula baris sama (patuh
-        // UNIQUE uq_ps_hash): reset ke UPLOADED, buang baris/fail lama, dispatch semula.
-        if ($wujud && $wujud->status === 'GAGAL') {
-            return $this->cubaSemula($wujud, $fail, $masjidId);
-        }
-        if ($wujud) {
-            throw new InvalidArgumentException('Penyata ini telah dimuat naik dengan provider yang sama sebelum ini (batch #'.$wujud->id.'). Pilih provider lain untuk banding.');
         }
 
         $ext = $this->extDariMime($fail);
@@ -101,6 +103,9 @@ class SemakPenyataService
                 'file_hash' => $hash,
                 'status' => 'UPLOADED',
                 'uploaded_by' => app()->bound('current.user_id') ? app('current.user_id') : null,
+                // Bukti persetujuan PDPA — tenant SETUJU kongsi penyata bank (data peribadi).
+                'pdpa_setuju_oleh' => app()->bound('current.user_id') ? app('current.user_id') : null,
+                'pdpa_setuju_pada' => now(),
             ]);
 
             // Stream fail ke disk (putFileAs) — elak muat keseluruhan (≤100MB) ke memori.
@@ -112,11 +117,58 @@ class SemakPenyataService
 
         $this->audit->log('CREATE', 'penyata_semakan', null, [
             'bank' => $bank->nama_bank, 'batch' => $batch->id, 'fail' => $batch->original_name,
+            'pdpa_setuju' => true, // tenant bersetuju kongsi penyata bank (bukti PDPA)
         ], $batch->id);
 
         ProsesPenyataAi::dispatch($batch->id);
 
         return $batch;
+    }
+
+    /**
+     * Padam batch penyata + fail asal secara KEKAL (tenant mesti scan semula untuk
+     * dapat balik). Baris yang SUDAH direkod ke lejar (MATCHED) DIKEKALKAN — hanya
+     * dilepaskan kaitan batch supaya rekod kewangan/audit tidak terjejas; baris
+     * belum direkod (UNMATCHED/IGNORED) dibuang. Tidak boleh padam semasa proses.
+     */
+    public function padamBatch(PenyataSemakan $batch): void
+    {
+        if (in_array($batch->status, ['UPLOADED', 'AI_PROCESSING'], true)) {
+            throw new InvalidArgumentException('Penyata sedang diproses — batalkan pemprosesan dahulu sebelum padam.');
+        }
+
+        $id = $batch->id;
+        $nama = $batch->original_name;
+        // Scan SIAP (SEDIA) sudah GUNA kuota → simpan rekod tombstone (DIPADAM)
+        // supaya memadam fail TIDAK memulihkan kuota (elak pintas had). Batch
+        // GAGAL/DIBATAL tidak mengira kuota → boleh dibuang terus.
+        $kekalUntukKuota = $batch->status === 'SEDIA';
+
+        DB::transaction(function () use ($batch, $kekalUntukKuota) {
+            // Rekod sebenar (MATCHED) dilindungi: lepas kaitan batch, JANGAN padam.
+            $batch->baris()->where('status', 'MATCHED')->update(['batch_id' => null]);
+            $batch->baris()->whereIn('status', ['UNMATCHED', 'IGNORED'])->delete();
+
+            if ($batch->file_path && Storage::disk('local')->exists($batch->file_path)) {
+                Storage::disk('local')->delete($batch->file_path);
+            }
+
+            if ($kekalUntukKuota) {
+                $batch->update([
+                    'status' => 'DIPADAM',
+                    'file_path' => '',
+                    'error_text' => 'Fail & data penyata telah dipadam oleh pengguna. Kuota kekal digunakan.',
+                ]);
+            } else {
+                $batch->delete();
+            }
+        });
+
+        $this->audit->log('DELETE', 'penyata_semakan',
+            ['batch' => $id, 'fail' => $nama],
+            ['nota' => $kekalUntukKuota
+                ? 'padam fail+data (rekod DIPADAM kekal utk kuota); baris MATCHED dikekalkan'
+                : 'padam kekal batch GAGAL/DIBATAL'], $id);
     }
 
     /** Muat naik semula fail yang batch-nya GAGAL — guna semula rekod (kuota dikira semula). */
@@ -140,7 +192,17 @@ class SemakPenyataService
                 'bil_baris' => 0,
                 'bil_auto_padan' => 0,
                 'tokens_used' => null,
+                'prompt_tokens' => null,
+                'completion_tokens' => null,
                 'cost_usd' => null,
+                'kaedah' => null,
+                'muka_jumlah' => null,
+                'muka_siap' => null,
+                'penyata_jum_debit' => null,
+                'penyata_jum_kredit' => null,
+                'batal_diminta' => false,
+                'pdpa_setuju_oleh' => app()->bound('current.user_id') ? app('current.user_id') : null,
+                'pdpa_setuju_pada' => now(),
                 'uploaded_by' => app()->bound('current.user_id') ? app('current.user_id') : null,
             ]);
         });

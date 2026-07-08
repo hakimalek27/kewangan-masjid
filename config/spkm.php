@@ -22,6 +22,19 @@ return [
     // DPI render muka PDF (150 = seimbang kejelasan vs saiz); pages per panggilan AI.
     'penyata_dpi' => (int) env('SPKM_PENYATA_DPI', 150),
     'penyata_pages_per_call' => (int) env('SPKM_PENYATA_PAGES_PER_CALL', 1),
+    // PDF DIGITAL (teks terbenam) — muka teks per panggilan AI (teks kecil → boleh
+    // gabung banyak muka satu panggilan; jauh lebih pantas daripada OCR imej).
+    'penyata_text_pages_per_call' => (int) env('SPKM_PENYATA_TEXT_PAGES_PER_CALL', 8),
+    // OCR IMBASAN SELARI — bilangan muka diproses serentak bila superadmin hidupkan
+    // toggle 'sp_ocr_selari' (potong ~10min → ~2-3min utk scan 70+ muka).
+    'ocr_selari_bil' => (int) env('SPKM_OCR_SELARI_BIL', 5),
+    // Had kos lalai USD setiap permintaan scan (pemutus keselamatan token) — superadmin
+    // boleh ubah di Tetapan AI (0 = tiada had). Elak fail rosak/banyak muka makan token.
+    'penyata_had_usd_lalai' => (float) env('SPKM_PENYATA_HAD_USD', 2.0),
+    // Kadar KOS pukul-rata USD/1000 token — HANYA fallback terakhir bila provider tiada
+    // kadar input/output & tiada kadar global. Anggaran kasar (gpt-4o campur) supaya kos
+    // tidak pernah kosong bila token digunakan. Kadar TEPAT = kadar provider (di atas).
+    'penyata_kos_blended_lalai' => (float) env('SPKM_PENYATA_KOS_BLENDED', 0.006),
 
     // Siri penomboran (jadual number_sequence) — kaunter berasingan setiap siri
     'siri' => ['RESIT', 'PV', 'PWR', 'JNL', 'VKUTIPAN'],
@@ -56,6 +69,27 @@ return [
             'models' => ['pixtral-large-latest', 'pixtral-12b-2409'], 'pdf' => false],
         ['key' => 'custom', 'label' => 'Custom (taip URL & model sendiri)', 'base_url' => '',
             'models' => [], 'pdf' => false],
+    ],
+
+    /*
+     | Harga rasmi model AI — USD per 1000 token [input, output]. Digunakan untuk
+     | auto-isi kadar di borang provider (superadmin boleh override). Sumber: laman
+     | rasmi provider (Jul 2026) — SEMAK SEMULA berkala kerana harga boleh berubah.
+     |  - gpt-4o        $2.50/$10 per 1M   → 0.0025 / 0.01
+     |  - gpt-4o-mini   $0.15/$0.60 per 1M → 0.00015 / 0.0006
+     |  - gpt-4.1       $5/$15 per 1M      → 0.005 / 0.015
+     |  - gpt-4.1-mini  $0.40/$1.60 per 1M → 0.0004 / 0.0016
+     |  - deepseek V4 Flash (deepseek-chat) $0.14/$0.28 per 1M → 0.00014 / 0.00028
+     */
+    'ai_harga_model' => [
+        'gpt-4o' => [0.0025, 0.01],
+        'openai/gpt-4o' => [0.0025, 0.01],
+        'gpt-4o-mini' => [0.00015, 0.0006],
+        'openai/gpt-4o-mini' => [0.00015, 0.0006],
+        'gpt-4.1' => [0.005, 0.015],
+        'gpt-4.1-mini' => [0.0004, 0.0016],
+        'deepseek-chat' => [0.00014, 0.00028],
+        'deepseek-v4-flash' => [0.00014, 0.00028],
     ],
 
     /*

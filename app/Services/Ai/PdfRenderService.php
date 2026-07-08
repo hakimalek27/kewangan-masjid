@@ -36,6 +36,39 @@ class PdfRenderService
         }
     }
 
+    /**
+     * Ekstrak TEKS terbenam setiap muka PDF (via pdftotext -layout). Pulangkan
+     * array teks per muka (dipisah aksara form-feed \f yang disisip pdftotext).
+     * PDF IMBASAN (image-only) memulangkan teks kosong → pemanggil tahu ia perlu
+     * OCR imej. PDF DIGITAL memulangkan teks penuh → boleh dibaca terus (pantas +
+     * tiada ralat OCR). Kosong jika Poppler tiada / gagal.
+     *
+     * @return string[]  teks setiap muka (ikut susunan)
+     */
+    public function ekstrakTeks(string $absPdfPath): array
+    {
+        try {
+            $p = new Process([$this->exe('pdftotext'), '-layout', '-enc', 'UTF-8', $absPdfPath, '-']);
+            $p->setTimeout(120);
+            $p->run();
+
+            if (! $p->isSuccessful()) {
+                return [];
+            }
+            $out = $p->getOutput();
+            if (trim($out) === '') {
+                return [];
+            }
+
+            // pdftotext menyisip \f antara muka (dan biasanya di hujung).
+            $muka = explode("\f", $out);
+
+            return array_map('rtrim', $muka);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** Bilangan muka PDF (via pdfinfo); 0 jika gagal. */
     public function bilMuka(string $absPdfPath): int
     {

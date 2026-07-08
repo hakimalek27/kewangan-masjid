@@ -51,6 +51,8 @@ class SemakPenyataController extends Controller
         $belum = collect();
         $sudah = collect();
         $laporan = null;
+        $jumMasuk = 0.0;
+        $jumKeluar = 0.0;
 
         if ($batch) {
             $belum = $batch->baris()
@@ -69,6 +71,13 @@ class SemakPenyataController extends Controller
             $sudah->each(fn ($l) => $l->voucher_ref = $refs[$l->matched_voucher_id] ?? null);
 
             $laporan = $this->recon->laporan((int) $batch->bank_account_id);
+
+            // Jumlah IKUT REKOD YANG AI SCAN (bukan jumlah tercetak dalam penyata) —
+            // untuk bendahari banding tally penyata sebenar vs hasil AI.
+            $agregat = DB::table('bank_statement_line')->where('batch_id', $batch->id)
+                ->selectRaw('COALESCE(SUM(kredit),0) masuk, COALESCE(SUM(debit),0) keluar')->first();
+            $jumMasuk = (float) ($agregat->masuk ?? 0);
+            $jumKeluar = (float) ($agregat->keluar ?? 0);
         }
 
         // Pilihan COA untuk modal Rekod: wang masuk = hasil (400/450) ATAU
@@ -88,6 +97,8 @@ class SemakPenyataController extends Controller
             'belum' => $belum,
             'sudah' => $sudah,
             'laporan' => $laporan,
+            'jumMasuk' => $jumMasuk,
+            'jumKeluar' => $jumKeluar,
             'coaHasil' => $coaHasil,
             'coaBelanja' => $coaBelanja,
             'kuotaBoleh' => $this->kuota->boleh($masjidId),
@@ -106,7 +117,11 @@ class SemakPenyataController extends Controller
         $data = $request->validate([
             'bank_account_id' => ['required', 'integer', MasjidRule::exists('bank_account')],
             'fail' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:102400'], // 100 MB
-        ], [], ['bank_account_id' => 'Bank', 'fail' => 'Fail Penyata']);
+            // Persetujuan PDPA WAJIB — penyata bank = data peribadi; bukti disimpan.
+            'pdpa_setuju' => ['accepted'],
+        ], [
+            'pdpa_setuju.accepted' => 'Anda mesti bersetuju dengan notis PDPA sebelum memuat naik penyata bank.',
+        ], ['bank_account_id' => 'Bank', 'fail' => 'Fail Penyata']);
 
         try {
             $batch = $this->servis->muatNaik((int) $data['bank_account_id'], $request->file('fail'));
@@ -125,6 +140,9 @@ class SemakPenyataController extends Controller
             'status' => $batch->status,
             'bil_baris' => (int) $batch->bil_baris,
             'bil_auto_padan' => (int) $batch->bil_auto_padan,
+            'kaedah' => $batch->kaedah,
+            'muka_jumlah' => (int) $batch->muka_jumlah,
+            'muka_siap' => (int) $batch->muka_siap,
             'error_text' => $batch->error_text,
         ]);
     }
@@ -139,6 +157,70 @@ class SemakPenyataController extends Controller
             $batch->original_name ?: basename($batch->file_path),
             ['Content-Type' => $batch->mime, 'X-Content-Type-Options' => 'nosniff'],
         );
+    }
+
+    /** Batalkan pemprosesan AI yang sedang berjalan (bendera → job berhenti awal). */
+    public function batal(PenyataSemakan $batch): RedirectResponse
+    {
+        if (!in_array($batch->status, ['UPLOADED', 'AI_PROCESSING'], true)) {
+            return back()->with('error', 'Penyata ini tidak sedang diproses.');
+        }
+
+        // UPLOADED (job belum mula) → terus DIBATAL; AI_PROCESSING → bendera (job
+        // menyemak antara muka dan berhenti sendiri).
+        $batch->update($batch->status === 'UPLOADED'
+            ? ['status' => 'DIBATAL', 'batal_diminta' => true, 'error_text' => 'Dibatalkan oleh pengguna sebelum diproses.']
+            : ['batal_diminta' => true]);
+
+        return redirect()->route('semakpenyata.index', ['batch' => $batch->id])
+            ->with('success', 'Permintaan batal dihantar — pemprosesan akan berhenti sebentar lagi.');
+    }
+
+    /** Padam kekal batch + fail (baris yang telah direkod ke lejar dikekalkan). */
+    public function padam(PenyataSemakan $batch): RedirectResponse
+    {
+        try {
+            $this->servis->padamBatch($batch);
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['rekod' => $e->getMessage()]);
+        }
+
+        return redirect()->route('semakpenyata.index')
+            ->with('success', 'Penyata & fail dipadam kekal. Untuk semak semula, muat naik & scan sekali lagi.');
+    }
+
+    /** Butiran satu voucher (untuk panel gelangsar "lihat rekod dalam sistem"). */
+    public function voucher(int $voucher): JsonResponse
+    {
+        $masjidId = (int) app('current.masjid_id');
+        $v = DB::table('journal_voucher')->where('id', $voucher)->where('masjid_id', $masjidId)->first();
+        abort_unless($v, 404);
+
+        $entries = DB::table('journal_entry as je')
+            ->join('coa as c', 'c.id', '=', 'je.coa_id')
+            ->where('je.voucher_id', $voucher)
+            ->orderByDesc('je.debit')
+            ->get(['c.kod', 'c.nama', 'je.debit', 'je.kredit', 'je.memo']);
+
+        $pautan = match (strtoupper((string) $v->source_type)) {
+            'KUTIPAN' => $v->source_id ? route('kutipan.view', $v->source_id) : null,
+            'BAYARAN' => $v->source_id ? route('belanja.view', $v->source_id) : null,
+            default => null,
+        };
+
+        return response()->json([
+            'ref' => $v->voucher_ref,
+            'tarikh' => $v->tarikh,
+            'deskripsi' => $v->deskripsi,
+            'status' => $v->status,
+            'jumlah' => number_format((float) $entries->sum('debit'), 2),
+            'entries' => $entries->map(fn ($e) => [
+                'kod' => $e->kod, 'nama' => $e->nama, 'memo' => $e->memo,
+                'debit' => (float) $e->debit > 0 ? number_format((float) $e->debit, 2) : '',
+                'kredit' => (float) $e->kredit > 0 ? number_format((float) $e->kredit, 2) : '',
+            ])->values(),
+            'pautan' => $pautan,
+        ]);
     }
 
     /** Rekod satu baris → catat kutipan/belanja sebenar. */

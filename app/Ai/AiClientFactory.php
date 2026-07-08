@@ -58,6 +58,14 @@ Peraturan JUMLAH & COA:
 - confidence ialah keyakinan cadangan COA anda 0-100.
 PROMPT;
 
+    /**
+     * Baris pembuka untuk mod TEKS (PDF digital diekstrak) — menggantikan ayat
+     * "Imej ini ialah SATU MUKA…" kerana input ialah teks berbilang muka.
+     */
+    public const PROMPT_PENYATA_TEKS_HEAD =
+        'Anda pembantu kewangan masjid. Teks di bawah ialah kandungan penyata bank '
+        .'(mungkin beberapa muka digabung, dipisah "----- MUKA -----").';
+
     public function __construct(private SecretVaultService $vault)
     {
     }
@@ -90,7 +98,8 @@ PROMPT;
             return [
                 $this->statementExtractor($provider->dialect, $apiKey, $provider->model, $provider->base_url),
                 ['provider' => $provider->nama, 'model' => $provider->model,
-                    'base_url' => $provider->base_url, 'sp_provider_id' => (int) $provider->id],
+                    'base_url' => $provider->base_url, 'sp_provider_id' => (int) $provider->id,
+                    'kos_input_1k' => $provider->kos_input_1k, 'kos_output_1k' => $provider->kos_output_1k],
             ];
         }
 
@@ -111,7 +120,8 @@ PROMPT;
 
         return [
             new OpenAiDialect($apiKey, $model, $baseUrl),
-            ['provider' => 'OPENAI', 'model' => $model, 'base_url' => $baseUrl, 'sp_provider_id' => 0],
+            ['provider' => 'OPENAI', 'model' => $model, 'base_url' => $baseUrl, 'sp_provider_id' => 0,
+                'kos_input_1k' => null, 'kos_output_1k' => null],
         ];
     }
 
@@ -129,8 +139,11 @@ PROMPT;
         };
     }
 
-    /** Prompt penyata penuh = arahan + panduan COA masjid (mapping + hasil 400/450 + belanja 600/650). */
-    public function buildPromptPenyata(int $masjidId): string
+    /**
+     * Prompt penyata penuh = arahan + panduan COA masjid (mapping + hasil 400/450
+     * + belanja 600/650). $teks=true → varian untuk input TEKS (PDF digital).
+     */
+    public function buildPromptPenyata(int $masjidId, bool $teks = false): string
     {
         $panduan = [];
 
@@ -157,11 +170,17 @@ PROMPT;
             }
         }
 
+        // Mod teks: tukar baris pembuka "Imej ini ialah SATU MUKA…" (badan peraturan
+        // tarikh/deskripsi/COA kekal sama).
+        $asas = $teks
+            ? self::PROMPT_PENYATA_TEKS_HEAD."\n".substr(self::PROMPT_PENYATA, strpos(self::PROMPT_PENYATA, "\n") + 1)
+            : self::PROMPT_PENYATA;
+
         if (empty($panduan)) {
-            return self::PROMPT_PENYATA;
+            return $asas;
         }
 
-        return self::PROMPT_PENYATA
+        return $asas
             ."\n\nSenarai kod COA masjid ini (guna untuk cadangan_coa):\n"
             .implode("\n", array_unique($panduan));
     }

@@ -39,12 +39,16 @@ class KuotaPenyataService
         return max(0, (int) Setting::get('sp_topup_'.now()->format('Y-m'), '0', $masjidId));
     }
 
-    /** Guna bulan ini = batch UPLOADED/AI_PROCESSING/SEDIA (GAGAL tidak dikira). */
+    /**
+     * Guna bulan ini = batch UPLOADED/AI_PROCESSING/SEDIA/DIPADAM. GAGAL & DIBATAL
+     * TIDAK dikira (dibebaskan). DIPADAM dikira kerana scan SUDAH digunakan —
+     * memadam fail tidak memulihkan kuota (elak pintas had bulanan).
+     */
     public function usedThisMonth(int $masjidId): int
     {
         return PenyataSemakan::withoutMasjidScope()
             ->where('masjid_id', $masjidId)
-            ->whereIn('status', ['UPLOADED', 'AI_PROCESSING', 'SEDIA'])
+            ->whereIn('status', ['UPLOADED', 'AI_PROCESSING', 'SEDIA', 'DIPADAM'])
             ->where('created_at', '>=', now()->startOfMonth())
             ->count();
     }
