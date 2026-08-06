@@ -1,6 +1,25 @@
-# HANDOVER — SPKM (folder masih `sppkms-v2` — lihat R2 di bawah)
-> Nota serah tugas ringkas. Sejarah PENUH: `../spm-explore/SEJARAH-KERJA.md` (§7o–§7r terkini).
+# HANDOVER — SPKM (folder kini `spkm` — rename SELESAI)
+> Nota serah tugas ringkas. Sejarah PENUH: `../spm-explore/SEJARAH-KERJA.md` (§7o–§7r) + memori `~/.claude/.../memory/sppkms-rebuild-project.md` (§SESI 9 Jul #1–#6 = terkini).
 > Laporan audit: `LAPORAN-AUDIT-MENYELURUH-20260702.md` · Pelan: `PELAN-PEMBAIKAN-AUDIT-20260702.md`.
+
+## ⭐⭐ TERKINI 9 Jul 2026 — Semak Penyata AI: parser digital + kawalan kos/kuota + PDPA (316/316 PHPUnit · 15/15 Playwright)
+> **STATUS GIT: SEMUA DIKOMIT & DIPUSH.** Cabang `fix/audit-20260702` sinkron dengan `origin`. Working tree BERSIH.
+> Commit terkini: `2c0cdbf` (perkemas notis PDPA) · `b1b624e` (26 fail, +1941 — keseluruhan kerja Semak Penyata AI 9 Jul).
+
+**Punca utama sesi ini:** pengguna uji upload penyata digital (130.pdf Affin) — LAMBAT + ~$0.32 + hasil TAK TALLY + 2 kali scan beza. **Punca sebenar: guna AI (LLM) transkrip jadual digital = SALAH alat** (mahal, tak deterministik, lossy).
+
+**Penyelesaian & ciri SIAP (6 sub-sesi):**
+1. **Laluan PDF DIGITAL** — `PdfRenderService::ekstrakTeks()` (`pdftotext -layout`): ≥60% muka ada teks → baca TEKS terus (saat, bukan minit). Fallback OCR imej utk PDF IMBASAN. Migrasi `2026_07_08_000004` (`penyata_semakan.kaedah/muka_jumlah/muka_siap`).
+2. **⭐ PARSER DIGITAL DETERMINISTIK** `app/Services/Ai/PenyataDigitalParser.php` — `cubaParse($teks)` baca teks Affin TERUS (PERCUMA, 100% konsisten, lengkap; kesan header lajur PER MUKA — pdftotext laras jarak tiap muka). Job cuba parse DULU (`kaedah='PARSE'`, 0 token); AI cuma fallback imbasan/format asing → jika Affin tukar format, sistem PINDAH ke AI automatik. Diuji vs 130.pdf: 304 baris tepat. Migrasi `2026_07_09_000004` (`penyata_jum_debit/kredit` utk semakan TALLY).
+3. **UI hasil** — kumpul ikut HARI (pemisah tarikh + jumlah masuk/keluar); klik BARIS untuk pilih (bukan checkbox sahaja); bar progres muka + poll; badge semakan TALLY (jumlah tercetak vs diekstrak = BEZA bermakna fail separa/tertinggal). Notifikasi "1 minit" (menipu) dibetulkan. Dashboard "Selamat datang ke SPKM" → nama masjid.
+4. **BATAL semasa proses** (`semakpenyata.batal`, job semak `dibatalkan()` antara kelompok) + **had kos USD/permintaan** (pemutus token; superadmin set `sp_had_usd_permintaan`, lalai 2 USD; job `melebihiHad()`). Migrasi `2026_07_09_000001` (status +DIBATAL, `batal_diminta`, `pdpa_setuju_oleh/pada`).
+5. **Pantauan kos AI per-tenant (superadmin)** — token TEPAT dari `usage` (prompt/completion ditangkap `OpenAiDialect`); USD DIKIRA ikut kadar input/output setiap provider (`sp_provider.kos_input_1k/kos_output_1k`); kad "Pantauan Kos Per-Tenant" + log lajur Provider. Migrasi `2026_07_09_000002`. Harga rasmi model config `ai_harga_model` (gpt-4o $2.50/$10; gpt-4o-mini $0.15/$0.60 per 1M) — borang provider auto-isi kadar bila model dikenali. **Provider harga MESTI padan MODEL.**
+6. **BUG kuota dibaiki** — padam scan SIAP dulu pulihkan kuota (pintas had 3/bln). Fix: status **DIPADAM** tombstone (migrasi `2026_07_09_000003`); `padamBatch` SEDIA→DIPADAM (kekal baris MATCHED, lejar utuh); `usedThisMonth` kira DIPADAM. **Dedup guna-semula** GAGAL/DIBATAL/DIPADAM tanpa kuota baharu.
+7. **Voucher klik→offcanvas kanan** (`#ocVoucher`) · **OCR imbasan SELARI** (toggle `sp_ocr_selari`, `Http::pool`, `ocr_selari_bil`=5; 10min→2-3min) · **LUMP-SUM** (longgok QR kecil jadi 1 rekod) · **COA PINTAR** (`cadangDariDeskripsi` kata kunci derma/sedekah/infaq/jumaat/wakaf/khairat/zakat; keluar: elektrik/air/gaji) · **PDPA** notis berstruktur + persetujuan WAJIB (`pdpa_setuju`) sebelum upload · peringatan SEMAK SILANG (AI tak 100% tepat).
+
+**Migrasi baharu sesi 9 Jul (dah migrate spkm + spkm_test):** `2026_07_08_000004`, `2026_07_09_000001/000002/000003/000004`.
+**Baki tertunggak (TIDAK sekat go-live):** gabung/kumpul menu `/semak-penyata` vs `/draf`; OpenRouter live-cost (`usage.cost`, pilihan); betulkan model provider id2/id3 (nama placeholder salah); parser bank lain (kini Affin sahaja); kuota ujian pengguna dah 6/3 bulan ini (boleh top-up superadmin).
+**GOTCHA jalankan lokal:** worker `php artisan queue:listen --queue=ai,default,webhook,backup,sync` MESTI hidup; JANGAN `composer run dev` (pcntl/pail rosak Windows — jalan `php artisan serve` + `queue:listen` + `npm run dev` berasingan); borang login di ROOT `/` bukan `/login`; provider default OpenAI/OpenRouter. Login: admin/admin12345, malmutaqqin/alm12345.
 
 ## ⭐ KEMAS KINI 8 Jul (malam) — Semak Penyata AI: pipeline PDF imbasan + lump-sum (299/299 PHPUnit)
 - **Punca "PDF tak baca penuh":** penyata bank sebenar = PDF **IMBASAN 72 muka** (scan, tiada teks). Provider vision baca muka pertama sahaja → 9–11 rekod + tarikh salah.
@@ -53,7 +72,7 @@ buang masjid 50 · re-point header-COA · kolum `must_change_password` · view `
 4. **Tukar kata laluan lalai sebenar:** `php artisan spkm:reset-default-passwords` (admin/malmutaqqin masih guna lalai).
 5. **Config go-live:** API key AI, bot Telegram + webhook secret, service account GDrive, kredensial dual-write; `.env` production (APP_DEBUG=false, SESSION_SECURE_COOKIE=true).
 6. **Kunci OpenAI PUSAT Semak Penyata (AI):** set di `/admin/semak-penyata` (superadmin) + hidupkan toggle global; kuota lalai 3/bulan/tenant.
-7. **R2 — tukar nama folder `sppkms-v2` → `spkm`:** DB sudah `spkm`/`spkm_test` (DB lama `sppkms`/`sppkms_test` KEKAL sebagai sandaran). Rename folder = langkah PALING akhir, dari LUAR folder (tutup semua sesi/proses dahulu); selepas itu buka semula projek di laluan baharu.
+7. ~~**R2 — tukar nama folder `sppkms-v2` → `spkm`**~~ ✅ **SELESAI** (8 Jul petang). Laluan aktif kini `C:\Projek Coding\Sistem Kewangan Masjid\spkm`. DB `spkm`/`spkm_test` (DB lama `sppkms`/`sppkms_test` KEKAL sandaran).
 
 ## Didokumen — sengaja TIDAK diubah (ada rasional)
 - C7 dashboard rekupmen = V1-faithful buku-tunai (tukar akan pecah tally 899,569.50)
